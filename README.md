@@ -31,6 +31,8 @@ PYTHONPATH=src python3 -m policydiff validate \
   --manifest demo-output/manifest.input.json \
   --episodes demo-output/episodes.input.csv
 
+PYTHONPATH=src python3 -m policydiff verify --bundle demo-output
+
 PYTHONPATH=src python3 -m policydiff compare \
   --manifest demo-output/manifest.input.json \
   --episodes demo-output/episodes.input.csv \
@@ -43,6 +45,14 @@ Or install with `pip install .` and use the `policydiff` command. Installing fro
 source requires setuptools 68+ and wheel in the build environment; runtime has
 no third-party dependencies. The command refuses an existing output directory.
 Without `--output`, `compare` writes JSON to standard output.
+
+`verify` is read-only: it checks the four saved payloads against the completion
+receipt and checks their linked metadata. This catches incomplete copies,
+accidental edits and mismatched files. It does not rerun the comparison, inspect
+evidence references, authenticate the author or prove any robot episode happened.
+Coordinated rewrites of files and receipt can pass. Extra files in the directory
+are outside the check. Use `validate` for the input contract and `compare` to
+reanalyze saved inputs; neither runs a robot.
 
 ## What the first version does
 
@@ -136,12 +146,20 @@ Exit codes:
 
 | Code | Meaning |
 | --- | --- |
-| 0 | Inputs validated or report created; **not** a policy pass |
+| 0 | Command succeeded (validate, compare, demo or verify); **not** a policy pass |
 | 2 | Invalid input or output error |
 | 3 | `--strict-coverage` was requested and required coverage is incomplete |
 | 4 | Internal software error; not an input rejection or policy failure |
 
 An incomplete report is useful evidence and is still written with strict coverage.
+An output error can also occur **after** a bundle finished, for example when a
+downstream command closes its input pipe. That returns exit 2 with
+`output_notification_failed`, `bundle_status: complete` and the output path on
+standard error. Do not automatically delete or overwrite outputs after any error;
+inspect them with `verify` first.
+Other completed commands report their `command` and `result_status` on delivery
+failure. If standard error is also unavailable, diagnostics are best-effort; the
+documented exit code is still preserved.
 Retest is optional to declare, but once declared it participates in coverage:
 `--strict-coverage` requires its outcomes as well as baseline/candidate outcomes
 on each required slice. Partial retests are preserved and reported as incomplete.

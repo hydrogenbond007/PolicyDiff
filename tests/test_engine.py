@@ -54,6 +54,70 @@ class EngineTests(unittest.TestCase):
         m, rows = fixture()
         self.assertEqual(compare(m, rows), compare(m, list(reversed(rows))))
 
+    def test_report_nested_data_is_detached_from_inputs(self):
+        m, rows = single()
+        original = copy.deepcopy((m, rows))
+        report = compare(m, rows)
+        report['manifest']['slices'][0]['case_ids'].append('report-only')
+        report['slices'][0]['cases'][0]['records']['before']['success'] = False
+        report['slices'][0]['revisions']['before']['missing_cases'].append('report-only')
+        self.assertEqual((m, rows), original)
+        before = copy.deepcopy(compare(m, rows))
+        after = compare(m, rows)
+        m['slices'][0]['case_ids'].clear()
+        rows[0]['success'] = not rows[0]['success']
+        self.assertEqual(after, before)
+
+    def test_slices_with_shared_case_ids_remain_independent_and_ordered(self):
+        m, rows = inferential(12)
+        second = dict(m['slices'][0], id='same-starts-other-condition', required=False)
+        m['slices'].append(second)
+        rows += [dict(row, slice=second['id'], success=row['revision'] != 'after')
+                 for row in rows[:]]
+        report = compare(m, rows)
+        first, second_report = report['slices']
+        self.assertEqual(first['observed_pairs']['harmful_flips'], 0)
+        self.assertEqual(second_report['observed_pairs']['harmful_flips'], 12)
+        self.assertTrue(report['required_coverage_complete'])
+        self.assertTrue(report['has_inferential_regression'])
+        self.assertEqual(report['observed_totals']['lost'], 12)
+        self.assertEqual(report['eligible_slice_count'], 2)
+        m['slices'].reverse()
+        for sl in m['slices']:
+            sl['case_ids'] = list(reversed(sl['case_ids']))
+        reversed_report = compare(m, list(reversed(rows)))
+        self.assertEqual([sl['id'] for sl in reversed_report['slices']],
+                         [sl['id'] for sl in m['slices']])
+        for old, new in zip(report['slices'], reversed(reversed_report['slices'])):
+            self.assertEqual(old['cases'], list(reversed(new['cases'])))
+            self.assertEqual({k: v for k, v in old.items() if k != 'cases'},
+                             {k: v for k, v in new.items() if k != 'cases'})
+        for key in ('coverage_counts', 'observed_totals', 'eligible_slice_count',
+                    'has_inferential_regression', 'required_coverage_complete'):
+            self.assertEqual(report[key], reversed_report[key])
+
+    def test_swapping_recorded_outcomes_reverses_flips_and_asymmetric_coverage(self):
+        m, rows = single()
+        rows = [row for row in rows if (row['revision'], row['case']) != ('after', '0')]
+        forward = compare(m, rows)['slices'][0]
+        swapped = []
+        for row in rows:
+            row = dict(row)
+            if row['revision'] != 'retest':
+                row['revision'] = 'after' if row['revision'] == 'before' else 'before'
+                revision = 'candidate' if row['revision'] == 'after' else 'baseline'
+                row['checkpoint_sha256'] = m[revision]['checkpoint_sha256']
+            swapped.append(row)
+        reverse = compare(m, swapped)['slices'][0]
+        a, b = forward['observed_pairs'], reverse['observed_pairs']
+        self.assertEqual((a['harmful_flips'], a['helpful_flips']),
+                         (b['helpful_flips'], b['harmful_flips']))
+        self.assertEqual(a['net_success_change'], -b['net_success_change'])
+        self.assertEqual(a['pairs'], b['pairs'])
+        self.assertEqual(forward['outcome_coverage']['baseline_only_outcome'],
+                         reverse['outcome_coverage']['candidate_only_outcome'])
+        self.assertEqual(forward['coverage'], reverse['coverage'])
+
     def test_unchanged_average_can_hide_flips(self):
         m, rows = single()
         p = compare(m, rows)['slices'][0]['observed_pairs']
@@ -241,6 +305,23 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(metric['paired_values'], 11)
         self.assertEqual(metric['paired_outcomes'], 12)
         self.assertIn('censoring', metric['scope'])
+
+    def test_metrics_exclude_nonoutcomes_unmatched_cases_and_missing_values(self):
+        m, rows = inferential(4)
+        rows = [row for row in rows if (row['revision'], row['case']) != ('after', '1')]
+        for row in rows:
+            row['wall_seconds'] = 999
+            if row['revision'] == 'after' and row['case'] == '0':
+                row.update(status='interrupted', success=None)
+            if row['case'] == '2':
+                row['wall_seconds'] = None if row['revision'] == 'after' else 999
+            if row['case'] == '3':
+                row['wall_seconds'] = 20 if row['revision'] == 'after' else 10
+        metric = compare(m, rows)['slices'][0]['metrics']['wall_seconds']
+        self.assertEqual(metric['paired_outcomes'], 2)
+        self.assertEqual(metric['paired_values'], 1)
+        self.assertEqual((metric['baseline_mean'], metric['candidate_mean'], metric['mean_change']),
+                         (10, 20, 10))
 
 
 class StatisticsTests(unittest.TestCase):

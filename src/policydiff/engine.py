@@ -1,7 +1,6 @@
 """Behavioral changes, missingness and deliberately bounded inference."""
 from __future__ import annotations
 
-from collections import Counter
 from copy import deepcopy
 from ._version import __version__
 from .schema import OUTCOMES, STATUSES, revisions, validate_manifest, validate_rows
@@ -51,26 +50,38 @@ def compare(manifest, rows):
                               "scored_outcomes": len(outcomes), "successes": sum(r["success"] for r in outcomes),
                               "terminal_status_counts": {status: sum(r['status'] == status for r in records) for status in STATUSES},
                               "missing_cases": missing[rid]}
-        def pairs_for(other):
-            pairs = []
-            for case in sl["case_ids"]:
-                b, c = table.get((base_id, sl["id"], case)), table.get((other, sl["id"], case))
-                if b and c and b["status"] in OUTCOMES and c["status"] in OUTCOMES:
-                    pairs.append((b, c))
-            return pairs
-        pairs = pairs_for(candidate_id)
-        retest_pairs = pairs_for(retest_id) if retest_id else []
+        pairs, retest_pairs, cases = [], [], []
+        partition = {"both_outcomes": 0, "baseline_only_outcome": 0,
+                     "candidate_only_outcome": 0, "neither_outcome": 0}
+        for case in sl["case_ids"]:
+            records = {rid: table.get((rid, sl["id"], case)) for rid in policy_ids}
+            b, c = records[base_id], records[candidate_id]
+            b_ok = b is not None and b["status"] in OUTCOMES
+            c_ok = c is not None and c["status"] in OUTCOMES
+            transition = "unresolved"
+            if b_ok and c_ok:
+                pairs.append((b, c))
+                partition["both_outcomes"] += 1
+                transition = ("lost" if b["success"] and not c["success"] else
+                              "gained" if not b["success"] and c["success"] else
+                              "retained_success" if b["success"] else "shared_failure")
+            elif b_ok:
+                partition["baseline_only_outcome"] += 1
+            elif c_ok:
+                partition["candidate_only_outcome"] += 1
+            else:
+                partition["neither_outcome"] += 1
+            r = records.get(retest_id)
+            if b_ok and r is not None and r["status"] in OUTCOMES:
+                retest_pairs.append((b, r))
+            cases.append({"id": case, "transition": transition,
+                          "records": {rid: ({k: record[k] for k in ("status", "success", "steps", "wall_seconds", "evidence_ref")}
+                                            if record is not None else None) for rid, record in records.items()}})
+
         counts = _counts(pairs)
         counts["declared_pairs"] = len(sl["case_ids"])
         counts["discordant_pairs"] = counts["harmful_flips"] + counts["helpful_flips"]
         counts["net_success_change"] = (counts["candidate_successes"] - counts["baseline_successes"]) / len(pairs) if pairs else None
-        partition = Counter({"both_outcomes": 0, "baseline_only_outcome": 0,
-                             "candidate_only_outcome": 0, "neither_outcome": 0})
-        for case in sl["case_ids"]:
-            b, c = table.get((base_id, sl["id"], case)), table.get((candidate_id, sl["id"], case))
-            b_ok, c_ok = bool(b and b["status"] in OUTCOMES), bool(c and c["status"] in OUTCOMES)
-            partition["both_outcomes" if b_ok and c_ok else "baseline_only_outcome" if b_ok
-                      else "candidate_only_outcome" if c_ok else "neither_outcome"] += 1
         coverage = ("not_tested" if not any(present.values()) else "complete"
                     if all(summaries[rid]["scored_outcomes"] == len(sl["case_ids"]) for rid in policy_ids)
                     else "incomplete")
@@ -115,22 +126,10 @@ def compare(manifest, rows):
         exposure = "not_a_held_out_test"
         if sl["role"] == "held_out":
             exposure = "excluded_from_declared_parent_and_update" if sl["parent_exposure"] == "excluded" else "parent_exposure_unknown"
-        cases = []
-        for case in sl["case_ids"]:
-            records = {rid: table.get((rid, sl["id"], case)) for rid in policy_ids}
-            b, c = records[base_id], records[candidate_id]
-            transition = "unresolved"
-            if b and c and b["status"] in OUTCOMES and c["status"] in OUTCOMES:
-                transition = ("lost" if b["success"] and not c["success"] else
-                              "gained" if not b["success"] and c["success"] else
-                              "retained_success" if b["success"] else "shared_failure")
-            cases.append({"id": case, "transition": transition,
-                          "records": {rid: ({k: record[k] for k in ("status", "success", "steps", "wall_seconds", "evidence_ref")}
-                                            if record else None) for rid, record in records.items()}})
         slices.append({"id": sl["id"], "task": sl["task"], "role": sl["role"],
                        "condition": sl["condition"], "axis": sl["axis"], "required": sl["required"],
                        "coverage": coverage, "revisions": summaries, "observed_pairs": counts,
-                       "outcome_coverage": dict(partition),
+                       "outcome_coverage": partition,
                        "unchanged_retest": retest,
                        "inference": infer, "exposure_status": exposure,
                        "metrics": {key: _metric(pairs, key) for key in ("steps", "wall_seconds")},

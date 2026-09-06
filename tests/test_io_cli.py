@@ -1,6 +1,7 @@
 import contextlib
 import io
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -100,6 +101,19 @@ class IOTests(unittest.TestCase):
             with patch('policydiff.io.MAX_INPUT_BYTES', 4), self.assertRaises(EvidenceError):
                 read_snapshot(p)
 
+    def test_snapshot_rejects_nonregular_input_before_open(self):
+        with tempfile.TemporaryDirectory() as directory:
+            paths = [Path(directory)]
+            if hasattr(os, 'mkfifo'):
+                fifo = Path(directory) / 'pipe'
+                os.mkfifo(fifo)
+                paths.append(fifo)
+            for path in paths:
+                with self.subTest(path=path), patch.object(Path, 'open') as opened:
+                    with self.assertRaisesRegex(EvidenceError, 'regular file'):
+                        read_snapshot(path)
+                    opened.assert_not_called()
+
     def test_source_hashes_match_exact_parsed_bytes(self):
         m, rows = fixture()
         mb = json.dumps(m, indent=3).encode() + b'  \n'
@@ -125,6 +139,12 @@ class IOTests(unittest.TestCase):
         self.assertNotIn('![image](', output)
         self.assertNotIn('[link](', output)
         self.assertIn('\\| fake', output)
+
+    def test_markdown_rejects_injected_input_digest(self):
+        report = compare(*fixture())
+        report['inputs'] = {'manifest_sha256': '` [payload](https://invalid.example) `'}
+        with self.assertRaises(EvidenceError):
+            markdown(report)
 
     def test_report_planned_denominator_and_untested_present(self):
         m, rows = fixture()
@@ -191,7 +211,7 @@ class CLITests(unittest.TestCase):
 
     def test_render_failure_does_not_create_output(self):
         dest = self.root / 'render-error'
-        with patch('policydiff.cli.markdown', side_effect=KeyError('injected renderer defect')):
+        with patch('policydiff.bundle.markdown', side_effect=KeyError('injected renderer defect')):
             code, _, _ = self.invoke(['compare'] + self.inputs + ['--output', str(dest)])
         self.assertEqual(code, 4)
         self.assertFalse(dest.exists())
@@ -251,8 +271,12 @@ class CLITests(unittest.TestCase):
                 raise OSError('simulated write failure')
             return original(path, *args, **kwargs)
 
+        report = compare(m, rows)
+        report['inputs'] = {'manifest_sha256': sha256(self.manifest.read_bytes()),
+                            'episodes_sha256': sha256(self.episodes.read_bytes())}
         with patch.object(Path, 'open', fail_report), self.assertRaises(OSError):
-            write_bundle(dest, compare(m, rows), {'manifest.input.json': self.manifest.read_bytes()})
+            write_bundle(dest, report, {'manifest.input.json': self.manifest.read_bytes(),
+                                      'episodes.input.csv': self.episodes.read_bytes()})
         self.assertTrue((dest / 'manifest.input.json').exists())
         self.assertFalse((dest / 'COMPLETE.json').exists())
 

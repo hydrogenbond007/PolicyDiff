@@ -102,12 +102,16 @@ the package cannot validate whether that classification was experimentally corre
 `report.json` contains the validated comparison, full manifest, all case outcomes,
 missingness, statistics/reasons withheld, and input hashes. `report.md` is the
 readable counterpart. `COMPLETE.json`, written last, contains package version and
-SHA-256 of the four files. No timestamp is injected, so identical inputs/version
+SHA-256 of the four files and `bundle_schema_version: 1`. No timestamp is injected, so identical inputs/version
 on the same Python/platform produce identical output bytes. Floating-point
 math libraries can differ across platforms; cross-platform byte identity is not
 promised and confidence bounds are not rounded to manufacture that guarantee.
-A failed write may leave a partial directory;
-absence of `COMPLETE.json` means the bundle is unfinished. This marker is not a
+A failed write may leave a partial directory. The receipt is written and closed
+as `COMPLETE.json.tmp`, then atomically renamed to `COMPLETE.json`. No incomplete
+receipt is deliberately published under the final name; the temporary file and
+partial payloads are preserved on failure. Consumers must parse/check the receipt,
+not treat mere file presence as proof of completion. Atomic publication is not
+a power-loss durability guarantee (there is no filesystem `fsync` protocol), a
 signed attestation or a guarantee against later modification.
 The completion marker also includes evidence origin, coverage, descriptive totals
 and input hashes. "Complete" describes writing the bundle, not passing the tests.
@@ -120,6 +124,29 @@ Markdown shows at most 50 changed/unresolved cases and 10 missing-ID examples
 per slice, with explicit notices pointing to the complete JSON. Input limits do
 not imply equally small outputs or protection against hostile local workloads.
 
+## Read-only bundle checks
+
+`verify --bundle DIRECTORY` supports bundle schema 1, input schema 1 and report
+schema 1. It checks the fixed four payload filenames, SHA-256 values, producer
+identity, receipt/report summary links, report/snapshot input hashes and embedded
+manifest equality. JSON duplicate keys, nonfinite numbers (including exponent
+overflow), unsupported schemas and symlinked/nonregular payload files are rejected.
+Receipt size is limited to 64 KiB; each other bundle file is limited to 64 MiB.
+The writer enforces matching limits and requires the two exact input snapshots.
+
+Success is `bundle_consistent`, not a policy pass, authentication or a reanalysis
+of task outcomes. The verifier does not recompute statistics, validate CSV episode
+records, open evidence references or inspect additional files. Anyone able to
+replace files and their receipt together can construct a passing bundle. Use
+`validate` for input-schema checks and `compare` for a fresh analysis under the
+installed version; cross-version/cross-platform report-byte equality is not assumed.
+
+Older unversioned developer-preview receipts are rejected, not silently upgraded.
+Their preserved inputs can be passed to `compare` with a new output directory;
+the resulting bundle records the current producer version. Original evidence
+is not overwritten and no policy episode is rerun. `input_sha256` remains the
+receipt's field name; `inputs` is the corresponding report field.
+
 Coverage counts always contain `complete`, `incomplete`, and `not_tested`;
 terminal-status counts contain all four status keys, including measured zeros.
 An untested declared retest is explicitly `coverage: not_tested`, and its complete-
@@ -130,6 +157,10 @@ The standalone report summarizes validated pairing but does not retain every
 per-row identity digest. Rechecking identity requires `episodes.input.csv` and
 the manifest snapshots in the CLI bundle, or the original input rows for a library
 consumer. A digest alone would not supply missing identity evidence.
+
+`unchanged_retest.coverage` describes baseline-to-retest **pair** coverage, not
+just execution of the retest arm. A fully scored retest can still lack paired
+baseline outcomes; per-arm counts are in `revisions[<retest_id>].scored_outcomes`.
 
 `family_alpha` is corrected across all declared slices separately for each
 endpoint family: regression tests and harmful-flip upper bounds. It does not

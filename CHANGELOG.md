@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.0.dev2 — unreleased
+
+- Read-only `verify --bundle` command for payload/receipt consistency, with
+  explicit no-authentication/no-reanalysis scope and bundle schema version 1.
+- Atomic completion-marker publication, short-write detection, fixed snapshot
+  names, matching read/write size limits and structured post-completion output errors.
+- Regular-file input checks, finite JSON float parsing and digest-safe Markdown.
+- Consolidated case pairing/classification without changing inference or reports;
+  new permutation, mutation, arm-symmetry and adversarial bundle tests.
+- Older unversioned receipts require regeneration from preserved inputs into a
+  new directory. No old evidence is changed and no robot episode is rerun.
+- Full source-inventory checks reject silently omitted files; bounded packaging
+  commands preserve partial timeout logs. Installed checks include bundle verification.
+
 ## 0.1.0.dev1 — unreleased
 
 GitHub-preview review hardening:

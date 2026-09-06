@@ -7,13 +7,21 @@ are inert text. Input hashes verify byte identity, not truth or authenticity.
 
 Files must remain in operator-controlled directories during reads and writes.
 The tool is not a defense against another local process replacing directories
-or symlinks during execution. Do not expose its file-reading interface directly
+or symlinks during execution. This includes `verify`: only check quiescent bundles
+that another process is not modifying. Static nonregular input files and symlinked
+bundle members are rejected, but pre-open checks are not a race-proof sandbox.
+Do not expose its file-reading interface directly
 to unauthenticated users or accept arbitrary server filesystem paths.
 
 Input-size, row and case limits bound normal preview use; they are not a promise
 of hardened availability under hostile workloads. Reports contain exact input
 snapshots and may therefore contain confidential information. Local-only does
 not make a generated report safe to publish.
+
+Bundle verification checks accidental corruption and internal metadata links,
+not authenticity, execution truth or correctness of the analysis. A coordinated
+rewrite of payloads and the unsigned receipt can pass. It does not open referenced
+traces/videos or certify extra files placed beside the four checked payloads.
 
 ## Reporting issues
 

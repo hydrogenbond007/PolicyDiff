@@ -1,6 +1,7 @@
 """Static, escaped Markdown reporting; no active content or external requests."""
 import html
 import re
+from .schema import sha
 
 MAX_VISIBLE_CASES = 50
 MAX_VISIBLE_MISSING = 10
@@ -90,5 +91,5 @@ def markdown(report):
     lines += ['## Limits', ''] + [f'- {escape(limit)}' for limit in report['limitations']]
     if report.get('inputs'):
         lines += ['', '## Input snapshots', '']
-        lines += [f"- {escape(key)}: `{value}`" for key, value in report['inputs'].items()]
+        lines += [f"- {escape(key)}: `{sha(value, 'report input digest')}`" for key, value in report['inputs'].items()]
     return '\n'.join(lines) + '\n'

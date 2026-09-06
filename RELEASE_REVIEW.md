@@ -112,3 +112,40 @@ A separate check against locally available SciPy covered 100 confidence bounds
 and 20 paired tests; maximum absolute discrepancies were below 2e-13 and 5e-16,
 respectively. SciPy is not a runtime or test-suite dependency. These are software
 checks, not physical experiments or evidence of a commercial moat.
+
+## dev2 public-readiness hardening
+
+Two substantive Fable 5 source-review passes and an independent internal agent
+reviewed the actual changes. Model identity was verified through the native
+subscription response; reviews did not run robots or certify correctness.
+Private prompts/receipts remain outside the repository.
+
+Reproduced and fixed: creation of a torn final completion marker, unsafe snapshot
+names in the internal writer, closed-pipe shutdown changing documented exit codes,
+post-success output failures losing completion context, unguarded error reporting
+when stderr is closed, malformed input-digest rendering, and overflowing JSON
+numbers being classified as internal defects. Static nonregular input checks also
+prevent accidentally blocking on named pipes. Short writes and failed atomic
+renames preserve partial output without publishing the final completion marker.
+
+The new `verify` command checks fixed payload bytes and linked metadata. It does
+not recompute outcomes, authenticate provenance or resist coordinated rewrites;
+tests demonstrate that limitation. Reanalysis is an explicit separate `compare`
+operation, so verification does not assume cross-version/platform byte equality.
+Kept the existing `input_sha256` receipt vocabulary and documented its mapping.
+New bundle schema 1 makes legacy unversioned-marker rejection explicit.
+
+The internal agent consolidated repeated case loops without changing report
+schema or inference gates. Four additional invariants and 500 deterministic
+synthetic old/new comparisons found equivalent reports. Added coverage for
+baseline-gapped retest pairs, version disagreement and unknown receipt fields.
+
+For release tooling, accepted fail-closed source inventory and preserved timeout
+diagnostics. Kept controlled clean-source builds, an explicit generated-file
+exclusion list, and the existing 120-second command cap; did not build from a dirty
+workspace or silently inflate timeout limits. Excluded paths are not audited.
+
+Concurrency races under hostile local filesystem mutation, power-loss durability,
+cryptographic authentication, licensing and hosted CI are not established by these
+changes. No gate was relaxed, unsupported robot mode added or scientific claim
+expanded. The final local tests/installed checks are engineering evidence only.

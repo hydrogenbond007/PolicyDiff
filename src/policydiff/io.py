@@ -3,6 +3,7 @@ import csv
 import hashlib
 import io
 import json
+import math
 from pathlib import Path
 
 from .schema import COLUMNS, MAX_ROWS, EvidenceError, require
@@ -14,8 +15,14 @@ def sha256(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def encode(value):
+    return (json.dumps(value, indent=2, sort_keys=True, allow_nan=False) + '\n').encode('utf-8')
+
+
 def read_snapshot(path):
-    with Path(path).open('rb') as handle:
+    path = Path(path)
+    require(path.is_file(), 'input must be a regular file')
+    with path.open('rb') as handle:
         data = handle.read(MAX_INPUT_BYTES + 1)
     require(len(data) <= MAX_INPUT_BYTES, "input exceeds the 16 MiB preview limit")
     return data
@@ -33,11 +40,22 @@ def _nonfinite(value):
     raise EvidenceError(f"nonfinite JSON literal: {value}")
 
 
-def parse_manifest(data):
+def _finite_float(value):
+    number = float(value)
+    require(math.isfinite(number), 'nonfinite JSON number')
+    return number
+
+
+def parse_json(data, label='manifest'):
     try:
-        return json.loads(data.decode('utf-8'), object_pairs_hook=_unique_keys, parse_constant=_nonfinite)
+        return json.loads(data.decode('utf-8'), object_pairs_hook=_unique_keys,
+                          parse_constant=_nonfinite, parse_float=_finite_float)
     except (UnicodeError, ValueError, RecursionError) as exc:
-        raise EvidenceError(f"invalid manifest JSON: {exc}") from exc
+        raise EvidenceError(f"invalid {label} JSON: {exc}") from exc
+
+
+def parse_manifest(data):
+    return parse_json(data)
 
 
 def parse_csv(data):

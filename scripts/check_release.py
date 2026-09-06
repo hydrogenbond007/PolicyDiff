@@ -13,10 +13,87 @@ import tarfile
 import zipfile
 
 PACKAGE = Path(__file__).resolve().parents[1]
+REQUIRED_TOP = ('pyproject.toml', 'MANIFEST.in', 'README.md', 'SCHEMA.md', 'ARCHITECTURE.md',
+                'CONTRIBUTING.md', 'SECURITY.md', 'CHANGELOG.md', 'REVIEW_NOTES.md',
+                'RELEASE_REVIEW.md', '.gitignore', '.gitattributes')
+SOURCE_TREES = {'src/policydiff': '.py', 'tests': '.py', 'scripts': '.py', '.github/workflows': '.yml'}
+# These generated/local-only root directories are excluded, not verified. Do not
+# extend this into a general ignore-glob parser that could hide source assets.
+EXCLUDED_ROOT_DIRS = {'.git', 'build', 'dist', '.venv', 'demo-output', 'another-new-report',
+                      'release-check', '.pytest_cache', 'htmlcov', 'private-data'}
+EXCLUDED_ROOT_FILES = {'PKG-INFO', '.coverage'}
+COMMAND_TIMEOUT = 120
 
 
 def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def source_inventory(package, output):
+    """Reject source files the clean-copy recipe cannot represent; never use Git."""
+    package, output = Path(package), Path(output).resolve()
+    if package.is_symlink():
+        raise RuntimeError('symlink source directory is not release-safe')
+    package = package.resolve()
+    sources = []
+
+    def visit(directory):
+        for path in sorted(directory.iterdir()):
+            name = path.relative_to(package).as_posix()
+            if path == output:
+                continue
+            if (path.parent == package and path.name in EXCLUDED_ROOT_FILES
+                    and path.is_file() and not path.is_symlink()):
+                continue
+            excluded_dir = (path.parent == package and path.name in EXCLUDED_ROOT_DIRS
+                            or path.name == '__pycache__' or path.name.endswith('.egg-info'))
+            if excluded_dir and path.is_dir():
+                continue
+            if path.is_symlink():
+                raise RuntimeError(f'symlink source is not release-safe: {name}')
+            if path.is_dir():
+                visit(path)
+            elif path.is_file():
+                supported = name in (*REQUIRED_TOP, 'LICENSE') or any(
+                    name.startswith(tree + '/') and path.suffix == suffix
+                    for tree, suffix in SOURCE_TREES.items())
+                if not supported:
+                    raise RuntimeError(f'unsupported release source file: {name}')
+                sources.append(path)
+            else:
+                raise RuntimeError(f'non-regular release source file: {name}')
+
+    visit(package)
+    missing = set(REQUIRED_TOP) - {path.relative_to(package).as_posix() for path in sources}
+    if missing:
+        raise RuntimeError(f'required release file missing: {sorted(missing)[0]}')
+    return sorted(sources)
+
+
+def run_logged(label, command, *, cwd, output, env, commands, expected=0):
+    """Preserve partial diagnostics even when a bounded child command times out."""
+    timed_out = None
+    try:
+        result = subprocess.run(command, cwd=cwd, env=env, text=True, capture_output=True,
+                                timeout=COMMAND_TIMEOUT)
+        stdout, stderr, code = result.stdout, result.stderr, result.returncode
+    except subprocess.TimeoutExpired as exc:
+        timed_out = exc
+        stdout, stderr, code = exc.stdout or '', exc.stderr or '', None
+    stdout = stdout.decode('utf-8', errors='replace') if isinstance(stdout, bytes) else stdout
+    stderr = stderr.decode('utf-8', errors='replace') if isinstance(stderr, bytes) else stderr
+    (output / (label + '.stdout.txt')).write_text(stdout, encoding='utf-8')
+    (output / (label + '.stderr.txt')).write_text(stderr, encoding='utf-8')
+    record = {'label': label, 'exit_code': code, 'expected': expected}
+    if timed_out is not None:
+        record.update(timed_out=True, timeout_seconds=timed_out.timeout)
+    commands.append(record)
+    if timed_out is not None or code != expected:
+        diagnostics = json.dumps({'stdout_tail': stdout[-4000:], 'stderr_tail': stderr[-4000:]})
+        print(f'{label} failure diagnostics: {diagnostics}', file=sys.stderr)
+        reason = f'timed out after {timed_out.timeout}s' if timed_out is not None else f'exit {code}, expected {expected}'
+        raise RuntimeError(f'{label}: {reason}; see saved logs and printed diagnostics') from timed_out
+    return result
 
 
 def main():
@@ -36,33 +113,16 @@ def main():
     env.pop('PYTHONPATH', None)
 
     def run(label, command, cwd=out, expected=0):
-        p = subprocess.run(command, cwd=cwd, env=env, text=True, capture_output=True, timeout=120)
-        (out / (label + '.stdout.txt')).write_text(p.stdout, encoding='utf-8')
-        (out / (label + '.stderr.txt')).write_text(p.stderr, encoding='utf-8')
-        receipt['commands'].append({'label': label, 'exit_code': p.returncode, 'expected': expected})
-        if p.returncode != expected:
-            diagnostics = json.dumps({'stdout_tail': p.stdout[-4000:], 'stderr_tail': p.stderr[-4000:]})
-            print(f'{label} failure diagnostics: {diagnostics}', file=sys.stderr)
-            raise RuntimeError(f'{label}: exit {p.returncode}, expected {expected}; see saved logs and printed diagnostics')
-        return p
+        return run_logged(label, command, cwd=cwd, output=out, env=env,
+                          commands=receipt['commands'], expected=expected)
 
     try:
         # Build from a clean allowlisted copy, never from ignored local outputs.
         clean = out / 'clean-source'
         clean.mkdir()
-        top = ('pyproject.toml', 'MANIFEST.in', 'README.md', 'SCHEMA.md', 'ARCHITECTURE.md',
-               'CONTRIBUTING.md', 'SECURITY.md', 'CHANGELOG.md', 'REVIEW_NOTES.md', 'RELEASE_REVIEW.md', '.gitignore', '.gitattributes')
-        sources = [PACKAGE / p for p in top]
-        for directory, suffix in (('src/policydiff', '.py'), ('tests', '.py'), ('scripts', '.py'), ('.github/workflows', '.yml')):
-            sources.extend(p for p in (PACKAGE / directory).rglob('*') if p.is_file() and p.suffix == suffix)
-        if (PACKAGE / 'LICENSE').is_file():
-            sources.append(PACKAGE / 'LICENSE')
+        sources = source_inventory(PACKAGE, out)
         source_hashes = {}
-        for source in sorted(sources):
-            if not source.is_file():
-                raise RuntimeError(f'required release file missing: {source.relative_to(PACKAGE)}')
-            if source.is_symlink():
-                raise RuntimeError('symlink source is not release-safe')
+        for source in sources:
             name = str(source.relative_to(PACKAGE))
             dest = clean / name
             dest.parent.mkdir(parents=True, exist_ok=True)
@@ -129,6 +189,8 @@ raise SystemExit(0 if result.wasSuccessful() else 1)
         run('installed-validate', cli + ['validate'] + inputs)
         run('installed-console-validate', [console, 'validate'] + inputs)
         run('installed-compare', cli + ['compare'] + inputs + ['--output', str(out / 'comparison')])
+        run('installed-verify', cli + ['verify', '--bundle', str(out / 'demo')])
+        run('installed-console-verify', [console, 'verify', '--bundle', str(out / 'comparison')])
         run('strict-missingness', cli + ['validate'] + inputs + ['--strict-coverage'], expected=3)
         run('refuse-overwrite', cli + ['demo', '--output', str(out / 'demo')], expected=2)
         for path in (out / 'demo').iterdir():
@@ -141,7 +203,8 @@ raise SystemExit(0 if result.wasSuccessful() else 1)
             for filename, expected_hash in marker['sha256'].items():
                 if sha(out / name / filename) != expected_hash:
                     raise RuntimeError('bundle hash mismatch')
-        if any(sha(PACKAGE / name) != expected_hash for name, expected_hash in source_hashes.items()):
+        final_hashes = {str(path.relative_to(PACKAGE)): sha(path) for path in source_inventory(PACKAGE, out)}
+        if final_hashes != source_hashes:
             raise RuntimeError('source changed during checks')
         receipt.update(status='verified', source_unchanged=True, deterministic_bundles=True,
                        bundle_hashes_verified=True, finished_utc=datetime.now(timezone.utc).isoformat())

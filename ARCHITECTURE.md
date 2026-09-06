@@ -48,7 +48,7 @@ validation cannot prove training history. No generalization certificate, deploym
 pass or automatic release gate. Untested slices stay visible. Partial paired
 counts are observed subsets, not unconditional population estimates.
 
-Commands implemented: validate, compare and demo. Public Python compare(manifest, rows)
+Commands implemented: validate, compare, demo and verify. Public Python compare(manifest, rows)
 API shares the same validation. Package must install and run offline in an isolated
 venv. Start with an import-oriented preview, not fake support for arbitrary VLAs.
 
@@ -66,6 +66,7 @@ completion receipts identify evidence origin and coverage; completion is not a p
 | `engine` | Pair cases, report changes/coverage, determine inference eligibility | Run policies or silently impute missing results |
 | `statistics` | Bounded numerical functions under caller-established assumptions | Decide experimental readiness |
 | `report` | Escape and summarize Markdown with visible truncation | Invent or hide underlying JSON outcomes |
+| `bundle` | Exclusive snapshots, atomic completion and read-only checksum/metadata checks | Authenticate the author, rerun policy outcomes or follow evidence references |
 | `cli` | Compose file input, comparison and exclusive bundle output | Publish, upload or issue a deployment pass |
 
 The supported Python API is `compare` and `EvidenceError`. Other modules are
