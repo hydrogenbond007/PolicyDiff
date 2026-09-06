@@ -30,8 +30,8 @@ The GitHub workflow runs source tests and the packaging check on Python 3.10 and
 3.12. CI success verifies software, not robot-policy competence or readiness.
 Actions are pinned to verified full commit IDs and the workflow has read-only
 repository permission, following [GitHub's workflow security guidance](https://docs.github.com/en/actions/reference/security/secure-use).
-The workflow has been prepared and locally checked, but cannot have a hosted
-passing result until it runs in the selected repository.
+Check the actual commit's [GitHub Actions results](https://github.com/hydrogenbond007/PolicyDiff/actions);
+local tests or a review summary do not establish that hosted CI passed.
 
 ## Contribution boundaries
 
@@ -52,6 +52,6 @@ passing result until it runs in the selected repository.
 
 ## Before publication
 
-Choose the owner/repository, visibility and license; audit the staged file list
+Confirm repository visibility and choose a license; audit the staged file list
 and archives; configure a private vulnerability-reporting channel; verify CI on
 the actual GitHub repository. Do not push generated `release-check` directories.

@@ -23,6 +23,8 @@ Open `demo-output/report.md`. The demo is **entirely synthetic**. It includes an
 unchanged aggregate score hiding different lost/gained cases, a camera-condition
 regression, an adaptation gain, unknown exposure, an interruption, and an untested
 condition. Those are software examples, not evidence about real robot policies.
+The demo deliberately withholds inference; numerical unit tests exercise that
+branch without presenting synthetic fixtures as measured simulation results.
 
 ```sh
 PYTHONPATH=src python3 -m policydiff validate \
@@ -50,7 +52,8 @@ Without `--output`, `compare` writes JSON to standard output.
   it has no results. An axis label is not proof the corresponding test happened.
 - Distinguishes scored policy failures from infrastructure faults, interruptions
   and missing records. Reports planned counts and asymmetric outcome coverage.
-- Checks checkpoint, per-slice protocol, physical-start and RNG identities.
+- Checks that caller-declared checkpoint, protocol, physical-start and RNG
+  identities agree with the comparison contract; it does not inspect those assets.
 - Shows unchanged-policy retest churn separately. It does not censor that churn
   or subtract it as a supposed causal correction.
 - Snapshots exactly the bytes parsed, rejects ambiguous inputs, escapes report
@@ -76,6 +79,35 @@ The library validates data but does not read files or compute source-byte hashes
 the file-oriented CLI adds input hashes and snapshots. Evidence references are
 unverified relative-path text, not clickable/executed assets. Video, trace and
 checkpoint verification need an adapter; they are not implemented here.
+
+## Is this a fit for your workflow?
+
+Use it when you already have saved, exactly paired simulation outcomes for a
+policy and its update, and want a reviewable accounting of losses, gains and
+missing evidence. A short paired-join script can reproduce the basic counts.
+The additional utility here is the shared input contract, rejection checks,
+explicit uncertainty and portable evidence bundle—not novel statistics.
+
+To bring your own runs:
+
+1. Declare the baseline, update, planned cases and conditions in the manifest.
+   Preserve failed and unexecuted cases; do not build the population from successes.
+2. Export the schema's 12 CSV columns from your runner. Use actual recorded start,
+   checkpoint and execution identities. If they were not captured, this preview
+   cannot certify pairing; do not manufacture hashes from case IDs to get accepted.
+3. Run `validate`, then `compare`. Read coverage and lost/gained cases before
+   inference. A retest is optional for descriptive reporting, required for inference.
+
+There is no automatic importer yet. Unknown training exposure, mixed updates,
+repeated starts and real hardware can fall outside this contract; see the schema
+before investing in an export. This does not audit the runner or its success labels.
+
+The broader category is not unoccupied: [RoboLens](https://www.robolens.to/)
+advertises policy-regression and release workflows, while
+[Inspect Robots](https://github.com/robocurve/inspect-robots) provides an evaluation
+runner/logging framework. Those descriptions are not independently tested
+integrations. PolicyDiff is a small analysis layer; superiority over those tools
+or an existing team notebook has not been demonstrated.
 
 ## Statistical scope
 
@@ -133,8 +165,11 @@ their existing workflow.
 
 ## Distribution
 
-No open-source license has been selected and nothing has been published. Choose a
-license, review names/dependencies and audit release contents before distributing.
+No open-source license has been selected and there is no public package release.
+This developer preview is maintained in the owner's
+[PolicyDiff repository](https://github.com/hydrogenbond007/PolicyDiff). Private
+repository access is not an open-source license. Choose licensing and contribution
+terms before public distribution or soliciting external patches.
 
 See [development and release checks](CONTRIBUTING.md), [security scope](SECURITY.md),
 and [unreleased changes](CHANGELOG.md). Only synthetic examples belong in this

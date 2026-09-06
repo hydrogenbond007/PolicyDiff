@@ -9,7 +9,7 @@ not execute tests; all executions below are local operator checks.
 
 - Accepted separate input/report schema versions, consistent library/CLI report
   keys and a single source for the package version.
-- Documented the full 13-key Python row contract and explicit module boundaries.
+- Documented the full 12-key Python row contract and explicit module boundaries.
 - Preserved conservative coverage: a retest is optional to declare, but if declared
   must be complete for strict required coverage. This is now explicit in CLI/docs.
 - Qualified byte determinism to the same build/interpreter/platform. Did not round
@@ -66,5 +66,49 @@ claimed. No hosted workflow result or unconditional model "approval" is claimed.
 Only synthetic examples belong in the repository. Private studies, weights,
 raw review prompts/receipts and customer data remain outside it. Readiness here
 means a software preview, not scientific replication, robot safety or a moat.
-GitHub repository/visibility and license remain user decisions. Hosted CI cannot
-be claimed passing before a push and an actual completed workflow.
+The user subsequently selected the repository; its existing private visibility
+is preserved. Licensing remains undecided. Hosted CI must be checked against the
+actual pushed commit, not inferred from these local review notes.
+
+## First-push product challenge
+
+A further Claude Opus source review challenged the preview against a short
+paired-join notebook and adjacent regression platforms. Its useful scope today
+is explicit evidence accounting and portable comparison bundles, not novel
+statistics or a demonstrated business moat. Integration cost and repeat usage
+remain unmeasured. The reviewer did not receive statistics or tests in this pass;
+the focused follow-up code review did. A broader new code-review request timed
+out without a verdict and is not counted as completed.
+
+Accepted: fixed documentation incorrectly counting 13 rather than 12 CSV fields,
+qualified identity checks as caller-declared consistency (not asset verification),
+and documented import prerequisites and alternatives. `MAX_ROWS` is used in the
+CSV parser and was not dead code. Kept synthetic demos descriptive; numerical
+unit tests exercise inference. Did not weaken identity/replication rules or
+select inferential slices after seeing outcomes to make more reports pass.
+
+Next product falsifier, not a completed study: ask an external simulation-policy
+team to compare two existing revisions against its normal notebook workflow.
+Record missing source metadata, unassisted import/triage time, consequential
+issues found and whether the team reuses the report for its next update. If
+required evidence cannot be recovered or the tool adds no useful finding or time
+saving, reconsider the contract/product before adding a platform.
+
+## First-push focused code review
+
+The further Claude Opus pairing/statistics review found no blocker in its inspected
+scope, not an absence-of-bugs guarantee. Accepted an explicit full-retest/gapped-
+partner test and an exact retest-output-key assertion. Kept the existing explicit
+mapping of pair counts to retest churn; a second projection layer solely to rename
+private helper keys would add code without fixing a current incorrect result.
+
+The README already qualified error control separately for the two endpoint
+families. That caveat now also travels in standalone JSON/Markdown reports and
+the schema guide. No statistical threshold or eligibility gate was relaxed.
+
+Independent local checks ran 100 unit tests, including all 216 three-arm terminal-
+state combinations, and clean installed-package checks on Python 3.10 and 3.12.
+A separate check against locally available SciPy covered 100 confidence bounds
+and 20 paired tests; maximum absolute discrepancies were below 2e-13 and 5e-16,
+respectively. SciPy is not a runtime or test-suite dependency. These are software
+checks, not physical experiments or evidence of a commercial moat.

@@ -161,6 +161,7 @@ def compare(manifest, rows):
                 "Caller-supplied hashes/exposure labels do not prove physical execution, training history or IID sampling.",
                 "Paired flips can reflect stochastic variability; retest churn is descriptive and is not subtracted as a causal correction.",
                 "Inference covers this fixed, declared slice family only; not repeated releases, adaptive selection or sequential peeking.",
+                "Alpha correction is separate for regression tests and harmful-flip bounds, not a joint guarantee across both endpoint families.",
                 "Incomplete-pair summaries describe observed subsets; they do not estimate the full declared population.",
                 "Held-out status is relative to declared data; unknown upstream pretraining is not proof of novelty.",
                 "No inference about untested objects, tasks, embodiments or sim-to-real transfer follows.",

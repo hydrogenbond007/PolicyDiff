@@ -21,6 +21,9 @@ classifiers = [
 [project.scripts]
 policydiff = "policydiff.cli:main"
 
+[project.urls]
+Repository = "https://github.com/hydrogenbond007/PolicyDiff"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["policydiff*"]

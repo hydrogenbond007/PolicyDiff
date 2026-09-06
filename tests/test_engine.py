@@ -1,4 +1,5 @@
 import copy
+import itertools
 import math
 import unittest
 
@@ -20,6 +21,39 @@ def inferential(n=100):
 
 
 class EngineTests(unittest.TestCase):
+    def test_every_terminal_state_combination_preserves_missingness(self):
+        m, template = single(1)
+        states = (None, ('completed', True), ('completed', False),
+                  ('policy_failure', False), ('infrastructure_error', None),
+                  ('interrupted', None))
+        for combination in itertools.product(states, repeat=3):
+            with self.subTest(states=combination):
+                rows = [dict(row, status=state[0], success=state[1])
+                        for row, state in zip(template, combination) if state]
+                report = compare(m, rows)
+                sl = report['slices'][0]
+                before, after = combination[:2]
+                scored = [state is not None and state[1] is not None for state in combination]
+                paired = scored[0] and scored[1]
+                loss = paired and before[1] and not after[1]
+                gain = paired and not before[1] and after[1]
+                transition = ('unresolved' if not paired else 'lost' if loss else 'gained'
+                              if gain else 'retained_success' if before[1] else 'shared_failure')
+                self.assertEqual(sl['cases'][0]['transition'], transition)
+                self.assertEqual(sl['observed_pairs']['pairs'], int(paired))
+                self.assertEqual(sl['observed_pairs']['harmful_flips'], int(loss))
+                self.assertEqual(sl['observed_pairs']['helpful_flips'], int(gain))
+                self.assertEqual(report['observed_totals']['unresolved'], int(not paired))
+                self.assertEqual(report['required_coverage_complete'], all(scored))
+                self.assertEqual(sl['coverage'], 'complete' if all(scored) else
+                                 'incomplete' if rows else 'not_tested')
+                self.assertEqual(sl['unchanged_retest']['pairs'], int(scored[0] and scored[2]))
+                self.assertIsNone(report['has_inferential_regression'])
+
+    def test_input_row_order_does_not_change_report(self):
+        m, rows = fixture()
+        self.assertEqual(compare(m, rows), compare(m, list(reversed(rows))))
+
     def test_unchanged_average_can_hide_flips(self):
         m, rows = single()
         p = compare(m, rows)['slices'][0]['observed_pairs']
@@ -100,6 +134,20 @@ class EngineTests(unittest.TestCase):
         m, rows = inferential()
         rows = [r for r in rows if not (r['revision'] == 'retest' and r['case'] == '0')]
         self.assertFalse(compare(m, rows)['slices'][0]['inference']['eligible'])
+
+    def test_complete_retest_arm_with_gapped_comparison_partner(self):
+        for missing_arm in ('before', 'after'):
+            with self.subTest(missing_arm=missing_arm):
+                m, rows = inferential()
+                rows = [r for r in rows if not (r['revision'] == missing_arm and r['case'] == '0')]
+                sl = compare(m, rows)['slices'][0]
+                self.assertEqual(sl['revisions']['retest']['scored_outcomes'], 100)
+                self.assertEqual(sl['coverage'], 'incomplete')
+                self.assertFalse(sl['inference']['eligible'])
+                retest_complete = missing_arm == 'after'
+                self.assertEqual(sl['unchanged_retest']['pairs'], 100 if retest_complete else 99)
+                self.assertEqual(sl['unchanged_retest']['coverage'], 'complete' if retest_complete else 'incomplete')
+                self.assertEqual(sl['inference']['unchanged_retest_discordant_pairs'], 0 if retest_complete else None)
 
     def test_missing_and_partial_retests_not_measured_stability(self):
         for cases in ([], ['0']):

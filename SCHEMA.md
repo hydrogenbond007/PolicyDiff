@@ -64,7 +64,7 @@ revision,slice,case,status,success,checkpoint_sha256,contract_sha256,physical_st
 ```
 
 For `compare(manifest, rows)`, `rows` is a list of dictionaries, each containing
-**all 13 column keys**, including optional measurements/references. Absent optional
+**all 12 column keys**, including optional measurements/references. Absent optional
 numbers may be `None` or `""`; references use `""`. Actual Python Booleans are
 accepted for success, integers for steps, and finite numbers for wall time.
 No fields are silently defaulted. `manifest` is a dictionary with the shape above.
@@ -130,3 +130,7 @@ The standalone report summarizes validated pairing but does not retain every
 per-row identity digest. Rechecking identity requires `episodes.input.csv` and
 the manifest snapshots in the CLI bundle, or the original input rows for a library
 consumer. A digest alone would not supply missing identity evidence.
+
+`family_alpha` is corrected across all declared slices separately for each
+endpoint family: regression tests and harmful-flip upper bounds. It does not
+provide a joint error guarantee across both, nor over repeated reports or releases.

@@ -206,7 +206,9 @@ class ContractTests(unittest.TestCase):
         sl = compare(self.manifest, self.rows)['slices'][0]
         self.assertEqual(sl['unchanged_retest']['churn_losses'], 1)
         self.assertEqual(sl['observed_pairs']['harmful_flips'], 1)
-        self.assertNotIn('harmful_flips', sl['unchanged_retest'])
+        self.assertEqual(set(sl['unchanged_retest']), {
+            'arm', 'pairs', 'declared_pairs', 'coverage', 'baseline_successes',
+            'retest_successes', 'churn_losses', 'churn_gains', 'discordant_pairs'})
         self.assertEqual(sl['unchanged_retest']['arm'], 'retest')
 
     def test_unscored_physical_alias_rejected(self):
