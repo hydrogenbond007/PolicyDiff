@@ -1,0 +1,12 @@
+include README.md SCHEMA.md ARCHITECTURE.md CONTRIBUTING.md SECURITY.md CHANGELOG.md REVIEW_NOTES.md RELEASE_REVIEW.md
+include .gitattributes .gitignore
+recursive-include tests *.py
+recursive-include scripts *.py
+recursive-include .github *.yml
+global-exclude *.py[cod] *.pt *.pth *.npz *.mp4 *.pem *.key
+prune build
+prune dist
+prune .venv
+prune private-data
+prune demo-output
+prune release-check

@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "policydiff"
+dynamic = ["version"]
+description = "Local, evidence-aware comparison of robot policy updates"
+requires-python = ">=3.10"
+dependencies = []
+readme = "README.md"
+classifiers = [
+  "Private :: Do Not Upload",
+  "Development Status :: 2 - Pre-Alpha",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering",
+]
+
+[project.scripts]
+policydiff = "policydiff.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["policydiff*"]
+
+[tool.setuptools.dynamic]
+version = {attr = "policydiff._version.__version__"}
