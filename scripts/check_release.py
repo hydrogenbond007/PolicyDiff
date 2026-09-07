@@ -98,6 +98,25 @@ def run_logged(label, command, *, cwd, output, env, commands, expected=0):
     return result
 
 
+def verify_sdist_sources(archive, source_hashes):
+    """Check every inventoried source, not one legacy test-file sentinel."""
+    names = archive.getnames()
+    roots = {name.split('/', 1)[0] for name in names}
+    if len(roots) != 1 or len(names) != len(set(names)):
+        raise RuntimeError('source distribution must have one root and unique member names')
+    root = next(iter(roots))
+    for name, expected in source_hashes.items():
+        try:
+            member = archive.getmember(root + '/' + name)
+        except KeyError as exc:
+            raise RuntimeError(f'source distribution omitted source: {name}') from exc
+        if not member.isfile():
+            raise RuntimeError(f'non-regular source distribution member: {name}')
+        with archive.extractfile(member) as handle:
+            if hashlib.sha256(handle.read()).hexdigest() != expected:
+                raise RuntimeError(f'source distribution changed source: {name}')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True, help='new directory; never overwritten')
@@ -125,7 +144,7 @@ def main():
         sources = source_inventory(PACKAGE, out)
         source_hashes = {}
         for source in sources:
-            name = str(source.relative_to(PACKAGE))
+            name = source.relative_to(PACKAGE).as_posix()
             dest = clean / name
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source, dest)
@@ -137,8 +156,8 @@ def main():
             raise RuntimeError('expected one source distribution')
         with tarfile.open(sdists[0]) as archive:
             names = archive.getnames()
-            if not any(n.endswith('/tests/test_contract.py') for n in names):
-                raise RuntimeError('source distribution omitted tests')
+            verify_sdist_sources(archive, source_hashes)
+            receipt['sdist_source_hashes_checked'] = True
             receipt['sdist_contents'] = names
         run('wheel-from-sdist', [sys.executable, '-m', 'pip', 'wheel', '--no-index', '--no-deps',
                                 '--no-build-isolation', '--wheel-dir', str(out / 'wheel'), str(sdists[0])])
@@ -217,6 +236,27 @@ raise SystemExit(0 if result.wasSuccessful() else 1)
         console_diagnostics = json.loads(run('installed-console-diagnostics', [console] + diagnostic_args, expected=2).stderr)
         if diagnostics != console_diagnostics or diagnostics['error_count'] != 2 or not diagnostics['errors_truncated']:
             raise RuntimeError('installed diagnostics disagree or lose errors')
+        # Independent synthetic protocol descriptions never enter the outcome bundle.
+        description = {'contract_snapshot_schema_version': 1, 'label': 'Synthetic before',
+                       'declared_for_contract_sha256': 'a' * 64,
+                       'fields': {'budget.wall_seconds': {'status': 'recorded', 'value': '600'},
+                                  'success_rule': {'status': 'unrecorded', 'value': None}}}
+        before, after = out / 'before.json', out / 'after.json'
+        before.write_text(json.dumps(description), encoding='utf-8')
+        description['fields']['budget.wall_seconds']['value'] = '3600'
+        description['label'] = 'Synthetic after'
+        after.write_text(json.dumps(description), encoding='utf-8')
+        contract_args = ['inspect-contract', '--before', str(before), '--after', str(after)]
+        contract = json.loads(run('installed-contract', cli + contract_args).stdout)
+        console_contract = json.loads(run('installed-console-contract', [console] + contract_args).stdout)
+        if (contract != console_contract or contract['counts'] != {'same': 0, 'changed': 1, 'undetermined': 1}
+                or not contract['same_declared_digest_with_field_changes']
+                or contract['snapshots']['before']['label'] != 'Synthetic before'
+                or contract['snapshots']['after']['label'] != 'Synthetic after'
+                or contract['inputs'] != {'before_snapshot_sha256': sha(before), 'after_snapshot_sha256': sha(after)}):
+            raise RuntimeError('installed contract description disagrees or loses changes/unknowns/source hashes')
+        after.write_text('{}', encoding='utf-8')
+        run('installed-contract-invalid-input', cli + contract_args, expected=2)
         run('strict-missingness', cli + ['validate'] + inputs + ['--strict-coverage'], expected=3)
         run('refuse-overwrite', cli + ['demo', '--output', str(out / 'demo')], expected=2)
         for path in (out / 'demo').iterdir():
@@ -229,7 +269,7 @@ raise SystemExit(0 if result.wasSuccessful() else 1)
             for filename, expected_hash in marker['sha256'].items():
                 if sha(out / name / filename) != expected_hash:
                     raise RuntimeError('bundle hash mismatch')
-        final_hashes = {str(path.relative_to(PACKAGE)): sha(path) for path in source_inventory(PACKAGE, out)}
+        final_hashes = {path.relative_to(PACKAGE).as_posix(): sha(path) for path in source_inventory(PACKAGE, out)}
         if final_hashes != source_hashes:
             raise RuntimeError('source changed during checks')
         receipt.update(status='verified', source_unchanged=True, deterministic_bundles=True,

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.0.dev4 — unreleased
+
+- Separate read-only `inspect-contract` command and `describe_contract_change`
+  API for bounded protocol-description snapshots: recorded changes, explicit
+  unknowns, absent fields and exact source-byte hashes.
+- Flags the same declared contract digest with changed description text for
+  review, without claiming proven drift, comparability or causality.
+- No change to the v1 outcome manifest, pairing, statistics or bundle formats.
+  No new runtime dependency, robot execution or model integration.
+- Snapshot errors identify the failing side. Release checks verify every
+  inventoried source's bytes in the sdist, not only one legacy test-file sentinel.
+
 ## 0.1.0.dev3 — unreleased
 
 - Located input errors: record IDs and ending physical CSV lines, bounded and

@@ -1,9 +1,11 @@
 """Release tooling tests load its clean-source script, never the source package."""
 import contextlib
+import hashlib
 import importlib.util
 import io
 from pathlib import Path
 import subprocess
+import tarfile
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -122,6 +124,41 @@ class ReleaseCommandTests(unittest.TestCase):
                                               env={}, commands=commands, expected=3)
             self.assertIs(returned, result)
             self.assertEqual(commands, [{'label': 'fixture', 'exit_code': 3, 'expected': 3}])
+
+
+class SourceDistributionTests(unittest.TestCase):
+    def check(self, members, expected=None):
+        data = io.BytesIO()
+        with tarfile.open(fileobj=data, mode='w') as archive:
+            for name, content in members:
+                member = tarfile.TarInfo(name)
+                if content is None:
+                    member.type, member.linkname = tarfile.SYMTYPE, 'elsewhere'
+                    archive.addfile(member)
+                else:
+                    member.size = len(content)
+                    archive.addfile(member, io.BytesIO(content))
+        data.seek(0)
+        if expected is None:
+            expected = {'tests/test_new.py': hashlib.sha256(b'new test').hexdigest()}
+        with tarfile.open(fileobj=data) as archive:
+            release.verify_sdist_sources(archive, expected)
+
+    def test_entire_inventory_checked_not_just_legacy_sentinel(self):
+        self.check([('package/tests/test_new.py', b'new test'), ('package/PKG-INFO', b'metadata')])
+        with self.assertRaisesRegex(RuntimeError, 'omitted source: tests/test_new.py'):
+            self.check([('package/tests/test_contract.py', b'old test')])
+
+    def test_source_bytes_and_regular_member_required(self):
+        for content, message in ((b'changed test', 'changed source'), (None, 'non-regular')):
+            with self.subTest(content=content), self.assertRaisesRegex(RuntimeError, message):
+                self.check([('package/tests/test_new.py', content)])
+
+    def test_empty_multiple_roots_and_duplicate_members_rejected(self):
+        valid = ('package/tests/test_new.py', b'new test')
+        for members in ([], [valid, valid], [valid, ('other/README.md', b'doc')]):
+            with self.subTest(members=members), self.assertRaisesRegex(RuntimeError, 'one root and unique'):
+                self.check(members)
 
 
 if __name__ == '__main__':

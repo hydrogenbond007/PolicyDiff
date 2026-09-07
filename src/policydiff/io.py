@@ -19,12 +19,14 @@ def encode(value):
     return (json.dumps(value, indent=2, sort_keys=True, allow_nan=False) + '\n').encode('utf-8')
 
 
-def read_snapshot(path):
+def read_snapshot(path, *, maximum=MAX_INPUT_BYTES):
+    require(type(maximum) is int and 1 <= maximum <= MAX_INPUT_BYTES, 'invalid input byte limit')
     path = Path(path)
     require(path.is_file(), 'input must be a regular file')
     with path.open('rb') as handle:
-        data = handle.read(MAX_INPUT_BYTES + 1)
-    require(len(data) <= MAX_INPUT_BYTES, "input exceeds the 16 MiB preview limit")
+        data = handle.read(maximum + 1)
+    require(len(data) <= maximum, 'input exceeds the 16 MiB preview limit' if maximum == MAX_INPUT_BYTES
+            else f'input exceeds the {maximum} byte limit')
     return data
 
 

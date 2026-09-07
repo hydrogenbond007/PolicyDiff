@@ -192,3 +192,51 @@ differential check against installed dev2 found identical full reports after
 normalizing only producer.version, including 40 synthetic inference-branch cases.
 Those are software fixtures, not new simulator or hardware observations. Final
 source inventory/hashes are checked again before the commit; hosted CI is separate.
+
+## dev4 benchmark-informed protocol descriptions
+
+Three further actual native Opus 5 source inspections covered architecture,
+adversarial implementation and closure. Only scoped package source/docs/tests
+were supplied, not private robotics payloads. An earlier connection timeout
+returned no analysis and is not counted. Reviewer identity came from the native
+response; ancillary native Haiku routing usage is not a substitute reviewer.
+All reviews were source inspection, not test execution or certification.
+
+Accepted the separate `describe_contract_change` API and `inspect-contract` CLI.
+Descriptions stay outside the outcome manifest, inference and bundle gate. Field
+names belong to exporters; flat, bounded strings avoid a general nested-JSON diff
+framework. Absent and unrecorded are distinct, both undetermined. An equal declared
+digest with changed text requests review, not proof of a configuration conflict:
+wording can change without the underlying setup changing. Complete-looking
+descriptions never certify complete or equivalent protocols.
+
+Reproduced/fixed: validation and size errors did not identify which input was bad.
+Both API and CLI now identify the before/after side. A metadata-orientation mutant
+survived the initial new tests; distinct labels/digests and exact projection keys
+now catch it. The review's separate suggestions that swapped field entries and an
+extra `comparable` key escaped testing did not reproduce: existing tests rejected
+both. Those are not claimed as runtime defects or new fixes. Removed unnecessary
+deep copying of validated string/null entries and clarified standalone limitations.
+
+Replaced a weak legacy-file sdist sentinel with complete inventoried-source hash
+checks, including omitted/changed/nonregular/duplicate-member rejection tests.
+The closure review's concern about omitted dotfiles was checked against the actual
+MANIFEST and clean builds: required files were included. Retained the deliberately
+small generated-file exclusion list; speculative cache types do not justify an
+unbounded ignore mechanism. Excluded directories remain outside the source audit.
+
+Closure found no blocker in the supplied source scope. After it, added exact
+label/name-boundary and CLI metadata-orientation assertions, and normalized release
+inventory keys to POSIX archive paths. Those final test/release-script edits are
+operator-verified changes, not a further model sign-off. The library/CLI runtime
+remains at the reviewed source revision. No Windows execution is claimed.
+
+Software checks include source and clean installed-package tests on Python 3.10
+and 3.12; 200 synthetic dev3/dev4 comparisons matched after normalizing only
+producer.version, with 40 inference-branch fixtures. A separate private check of
+preserved episode inputs retained legacy counts and caveats, with no robot rerun.
+Partial source-bound historical configuration descriptions also exercised the
+installed CLI; selected fields are not a complete protocol audit or causal study.
+Examples in this repository remain synthetic. These checks establish engineering
+behavior within their scope, not novelty, a defensible business moat or deployment
+readiness. Native review payloads and validation artifacts stay outside the package.

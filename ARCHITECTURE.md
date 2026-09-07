@@ -48,7 +48,7 @@ validation cannot prove training history. No generalization certificate, deploym
 pass or automatic release gate. Untested slices stay visible. Partial paired
 counts are observed subsets, not unconditional population estimates.
 
-Commands implemented: validate, compare, cases, demo and verify. Public Python compare(manifest, rows)
+Commands implemented: validate, compare, cases, demo, verify and inspect-contract. Public Python compare(manifest, rows)
 API shares the same validation. Package must install and run offline in an isolated
 venv. Start with an import-oriented preview, not fake support for arbitrary VLAs.
 
@@ -67,10 +67,11 @@ completion receipts identify evidence origin and coverage; completion is not a p
 | `statistics` | Bounded numerical functions under caller-established assumptions | Decide experimental readiness |
 | `report` | Escape and summarize Markdown with visible truncation | Invent or hide underlying JSON outcomes |
 | `triage` | Select displayed cases from a full validated comparison, retaining all slice summaries | Recompute inference or coverage on outcome-selected cases |
+| `contract` | Describe flat caller-recorded protocol fields across two snapshots | Certify matching protocols, interpret outcomes or weaken the comparison gate |
 | `bundle` | Exclusive snapshots, atomic completion and read-only checksum/metadata checks | Authenticate the author, rerun policy outcomes or follow evidence references |
 | `cli` | Compose file input, comparison and exclusive bundle output | Publish, upload or issue a deployment pass |
 
-The supported Python API is `compare` and `EvidenceError`. Other modules are
+The supported Python API is `compare`, `describe_contract_change` and `EvidenceError`. Other modules are
 internal during the preview. Adapters should construct the explicit manifest/row
 contract or use CLI input files, not couple policy execution into the engine.
 No plugin loader is justified yet. A future runner needs its own measured-state,
@@ -92,3 +93,13 @@ The view envelope is versioned separately; inherited report fields still follow
 the nested report schema version. On valid inputs `validate` deliberately runs
 the shared row checks again through `compare`, trading duplicate work for no
 prevalidated-table bypass of the public comparison contract.
+
+`describe_contract_change(before, after)` is separate from scored comparisons.
+Its closed snapshot envelope contains bounded, caller-named literal string fields;
+unrecorded and absent entries remain undetermined. No nested diff, normalization,
+ignored fields, patch output or runner hooks. Its optional declared digest is an
+unverified association, never computed from description text. The CLI independently
+hashes the exact snapshot bytes. Same declared digest plus changed text requests
+review, not a claim of proven configuration drift. The v1 manifest, pairing,
+inference and bundle formats do not ingest these snapshots. Keep them beside a
+bundle if useful; `verify` neither includes nor checks such sidecar files.

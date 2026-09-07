@@ -219,3 +219,112 @@ baseline outcomes; per-arm counts are in `revisions[<retest_id>].scored_outcomes
 `family_alpha` is corrected across all declared slices separately for each
 endpoint family: regression tests and harmful-flip upper bounds. It does not
 provide a joint error guarantee across both, nor over repeated reports or releases.
+
+## Protocol description snapshots
+
+This is a **separate descriptive format**, not a new manifest version or an input
+to `compare`/`verify`. It helps review recorded setup differences across runs.
+Nothing establishes that a snapshot is complete, accurate or associated with an
+executed run. The Python API is `describe_contract_change(before, after)`;
+`inspect-contract --before FILE --after FILE` reads files and writes JSON to stdout.
+
+Each snapshot has exactly four required fields:
+
+- `contract_snapshot_schema_version`: integer 1 (not Boolean or float).
+- `label`: 1–160 printable characters, no surrounding whitespace.
+- `declared_for_contract_sha256`: lowercase SHA-256 or `null` when no association
+  is recorded. This digest is **caller-declared**, not checked or recomputed.
+- `fields`: object with 1–64 caller-named entries. Names use the same 1–80-character
+  identifier alphabet as slice IDs; dots can express a flat namespace. Each entry
+  has exactly `status` and `value`. Status `recorded` requires a 1–200-character
+  printable string with no surrounding whitespace; `unrecorded` requires `null`.
+
+Unknown envelope/entry keys, non-string recorded values and nested structures
+are rejected. File input is bounded to 64 KiB per snapshot and parsed with the
+same duplicate-key, UTF-8 and finite-number checks as other JSON inputs. Counts,
+names and values are bounded in the Python API too; only byte-oriented limits
+and source-byte hashes apply specifically to file inputs.
+This is a short-description format, not a lossless raw-configuration export.
+Empty/multiline values are unsupported; do not silently replace them with invented
+text. A separately named source-byte fingerprint field can record their identity,
+but cannot explain their contents. As with existing input readers, a regular file
+reached through a symlink is accepted; this is not hostile-filesystem race protection.
+
+Two executable **synthetic** examples, saved as `before.json` and `after.json`:
+
+```json
+{
+  "contract_snapshot_schema_version": 1,
+  "label": "Synthetic before",
+  "declared_for_contract_sha256": null,
+  "fields": {
+    "budget.wall_seconds": {"status": "recorded", "value": "600"},
+    "controller.kind": {"status": "recorded", "value": "waypoint"},
+    "success.post_release": {"status": "unrecorded", "value": null}
+  }
+}
+```
+
+```json
+{
+  "contract_snapshot_schema_version": 1,
+  "label": "Synthetic after",
+  "declared_for_contract_sha256": null,
+  "fields": {
+    "budget.wall_seconds": {"status": "recorded", "value": "3600"},
+    "controller.kind": {"status": "recorded", "value": "waypoint"},
+    "success.post_release": {"status": "unrecorded", "value": null}
+  }
+}
+```
+
+These produce one `changed`, one `same` and one `undetermined` field. Values use
+literal string equality: `20` and `20.0` differ; units are not converted. Normalize
+units and naming in the exporter, consistently and without inventing missing
+values. A field present on one side only is undetermined, **not** a known added or
+removed setting. Renaming a key creates two undetermined entries, not an inferred
+mapping. Fields omitted from both inputs are invisible. Use explicit `unrecorded`
+entries to make known gaps visible; a small all-same snapshot proves no completeness.
+
+Suggested names (not enforced): `environment.version`, `task_set`,
+`controller.kind`, `controller.control_hz`, `action.interface`, `sensors.views`,
+`budget.physics_steps`, `budget.wall_seconds`, `agent.history`, `agent.effort`,
+`success.rule`, `termination.rule`, `interruption.rule`, `pairing.method`.
+Record only what the source supports. Do not label a release/source-file hash as
+the execution-contract digest unless that is actually its recorded meaning.
+Deliberate model/context interventions are separate from the shared execution
+contract; this utility does not decide which settings belong to either category.
+
+Output uses `contract_change_schema_version: 1` and status
+`contract_descriptions_compared`. It includes:
+
+- `producer`; `inputs` with exact `before_snapshot_sha256`/`after_snapshot_sha256`
+  for the CLI, or `null` for the in-memory API; `snapshots` with each side's label,
+  input schema version and declared contract association.
+- `counts` with all three keys (`same`, `changed`, `undetermined`),
+  `any_declared_field_changed`, `any_field_undetermined`, and `fields` containing
+  the entire sorted union (up to 128 entries). Each has `name`, comparison `status`,
+  and `before`/`after` entries. Missing entries are explicitly rendered with
+  `status: absent, value: null`; explicit unknowns retain `status: unrecorded`.
+- `declared_digest_relation`: `same`, `different` or `undetermined` (either digest
+  is null). `same_declared_digest_with_field_changes` is true only for two equal
+  non-null declared digests and at least one changed recorded string. It requests
+  review, not a finding of actual drift: descriptions may differ without the
+  underlying settings differing, or the association may be wrong. Absent/unrecorded
+  entries do not set this signal; inspect the undetermined counts separately.
+- Non-optional `limitations`, including for an all-same result. No statistical
+  population, outcome, physical-validity claim or comparability verdict is produced.
+
+Both snapshots must validate before output. Exit 0 means successful description,
+even if fields changed or are undetermined; invalid input/I/O returns exit 2, with
+JSON on stderr when it is writable. Errors identify `snapshot_side` (`before` or
+`after`), including schema and size failures. Python `EvidenceError.details` also
+identifies the side. Unexpected internal errors exit 4. There is no output directory,
+bundle, overwrite, strict-coverage mode or automatic gate. Parser usage errors
+retain the normal argparse usage/exit-2 behavior. Output failures retain completed
+command context through the usual CLI diagnostics.
+
+Preserve the original snapshots if you need to reproduce the view. Its byte hashes
+identify those snapshots, **not** the actual robot setup. Snapshot labels, field
+names and values may be confidential; nothing is redacted automatically. An
+optional sidecar next to a report bundle stays outside `verify`'s four-file check.

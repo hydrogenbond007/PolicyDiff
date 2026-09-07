@@ -7,9 +7,10 @@ import sys
 
 from . import __version__
 from .bundle import verify_bundle, write_bundle
+from .contract import MAX_SNAPSHOT_BYTES, describe_contract_change
 from .demo import fixture
 from .engine import compare
-from .io import csv_bytes, encode, load_inputs, parse_csv, parse_manifest, sha256
+from .io import csv_bytes, encode, load_inputs, parse_csv, parse_json, parse_manifest, read_snapshot, sha256
 from .schema import EvidenceError, validate_manifest, validate_rows
 from .triage import TRANSITIONS, select_cases
 
@@ -42,6 +43,14 @@ def _error_limit(value):
     return number
 
 
+def _contract_input(path, side):
+    try:
+        data = read_snapshot(path, maximum=MAX_SNAPSHOT_BYTES)
+        return parse_json(data, 'contract snapshot'), sha256(data)
+    except (EvidenceError, OSError) as exc:
+        raise EvidenceError(f'{side} snapshot: {exc}', details={'snapshot_side': side}) from exc
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--version', action='version', version=__version__)
@@ -65,10 +74,22 @@ def main(argv=None):
     demo.add_argument('--output', required=True, type=Path)
     verify = sub.add_parser('verify', help='check a saved bundle; not a policy pass or authenticity check')
     verify.add_argument('--bundle', required=True, type=Path)
+    contract = sub.add_parser('inspect-contract', help='describe recorded protocol differences; not a comparability check')
+    contract.add_argument('--before', required=True, type=Path)
+    contract.add_argument('--after', required=True, type=Path)
     args = parser.parse_args(argv)
     completed_result = {}
     record_lines = []
     try:
+        if args.command == 'inspect-contract':
+            before, before_hash = _contract_input(args.before, 'before')
+            after, after_hash = _contract_input(args.after, 'after')
+            result = describe_contract_change(before, after)
+            result['inputs'] = {'before_snapshot_sha256': before_hash, 'after_snapshot_sha256': after_hash}
+            completed_result = {'command': args.command, 'result_status': result['status']}
+            sys.stdout.write(encode(result).decode())
+            sys.stdout.flush()
+            return 0
         if args.command == 'verify':
             result = verify_bundle(args.bundle)
             completed_result = {'command': 'verify', 'result_status': result['status']}

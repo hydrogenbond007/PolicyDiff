@@ -84,6 +84,28 @@ Each invocation repeats that full analysis, even when only a display filter chan
 - Snapshots exactly the bytes parsed, rejects ambiguous inputs, escapes report
   text and records bundle hashes. Caller-provided identity is still an attestation.
 
+## Did the test setup change too?
+
+Before attributing a score difference to a policy, inspect the recorded protocol
+descriptions. `inspect-contract` is a separate, read-only command:
+
+```sh
+policydiff inspect-contract --before before.json --after after.json
+```
+
+Use the two synthetic snapshot examples in [the schema guide](SCHEMA.md#protocol-description-snapshots).
+The command shows `same`, `changed` and `undetermined` fields, keeps absent and
+explicitly unrecorded values distinct, and hashes the exact input bytes. A changed
+description under the same declared contract digest is flagged for review. This
+can catch a recordkeeping inconsistency; it cannot establish which record is right.
+
+Keep controller/action interface, sensors, budgets, history/reasoning and scoring
+rules visible across runs. Field names are yours, not tied to a robot/model. Values
+are short literal strings, not arbitrary nested configs. Matching descriptions
+do **not** prove matching protocols: fields omitted from both inputs are invisible.
+The command never reads outcomes, changes the score-comparison gate or supplies a
+pass/fail judgment. Exit 0 means the description command completed, even with changes.
+
 ## Input contract
 
 The demo generates a complete manifest and the CSV header. See

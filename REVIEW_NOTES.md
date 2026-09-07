@@ -1,7 +1,7 @@
 # Developer-preview review log
 
-Latest continuation: see the dev3 section of [release review](RELEASE_REVIEW.md)
-for three additional actual Opus 5 passes, diagnostic/triage changes and their
+Latest continuation: see the dev4 section of [release review](RELEASE_REVIEW.md)
+for three additional actual Opus 5 passes, protocol-description changes and their
 adjudication. The initial implementation record below is historical.
 
 Three substantive Claude Code reviews have been received: contract review,
