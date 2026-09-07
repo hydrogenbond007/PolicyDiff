@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.0.dev3 — unreleased
+
+- Located input errors: record IDs and ending physical CSV lines, bounded and
+  escaped unknown-field diagnostics, without changing validated evidence.
+- `validate --max-errors` collects one error per rejected record, counts all
+  rejected records and explicitly skips pairing checks until row errors are fixed.
+  The Python comparison API remains fail-fast; errors gain additive `details`.
+- Read-only `cases` command selects lost/gained/unresolved or other transitions
+  while retaining all slice summaries, full denominators, source hashes and
+  inference limits. Display filtering never changes the statistical population.
+- No input/report/bundle schema change, new runtime dependency or robot run.
+
 ## 0.1.0.dev2 — unreleased
 
 - Read-only `verify --bundle` command for payload/receipt consistency, with

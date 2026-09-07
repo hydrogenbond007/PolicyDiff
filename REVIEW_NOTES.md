@@ -1,5 +1,9 @@
 # Developer-preview review log
 
+Latest continuation: see the dev3 section of [release review](RELEASE_REVIEW.md)
+for three additional actual Opus 5 passes, diagnostic/triage changes and their
+adjudication. The initial implementation record below is historical.
+
 Three substantive Claude Code reviews have been received: contract review,
 implementation review and patch-closure review. All used the signed-in Claude subscription, requested
 Opus, and resolved to Claude Opus 5. Only this new framework's source and docs were

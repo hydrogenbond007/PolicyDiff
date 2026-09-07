@@ -48,7 +48,7 @@ validation cannot prove training history. No generalization certificate, deploym
 pass or automatic release gate. Untested slices stay visible. Partial paired
 counts are observed subsets, not unconditional population estimates.
 
-Commands implemented: validate, compare, demo and verify. Public Python compare(manifest, rows)
+Commands implemented: validate, compare, cases, demo and verify. Public Python compare(manifest, rows)
 API shares the same validation. Package must install and run offline in an isolated
 venv. Start with an import-oriented preview, not fake support for arbitrary VLAs.
 
@@ -66,6 +66,7 @@ completion receipts identify evidence origin and coverage; completion is not a p
 | `engine` | Pair cases, report changes/coverage, determine inference eligibility | Run policies or silently impute missing results |
 | `statistics` | Bounded numerical functions under caller-established assumptions | Decide experimental readiness |
 | `report` | Escape and summarize Markdown with visible truncation | Invent or hide underlying JSON outcomes |
+| `triage` | Select displayed cases from a full validated comparison, retaining all slice summaries | Recompute inference or coverage on outcome-selected cases |
 | `bundle` | Exclusive snapshots, atomic completion and read-only checksum/metadata checks | Authenticate the author, rerun policy outcomes or follow evidence references |
 | `cli` | Compose file input, comparison and exclusive bundle output | Publish, upload or issue a deployment pass |
 
@@ -81,3 +82,13 @@ producer and nullable source inputs, and the CLI fills source hashes. Versioning
 uses one literal source in `_version.py`; release checks compare it with installed
 metadata. Same-build/interpreter/platform byte reproducibility is tested, not
 asserted across different floating-point libraries or unpublished code revisions.
+
+`validate` optionally collects bounded, located diagnostics through the same row
+validator used by `compare`. Invalid rows never yield a partial table. Pairing
+checks are explicitly skipped until rows pass. CSV line locations are separate
+from evidence fields. `cases` runs the full comparison before display filtering;
+its independently versioned view retains full-population inference and coverage.
+The view envelope is versioned separately; inherited report fields still follow
+the nested report schema version. On valid inputs `validate` deliberately runs
+the shared row checks again through `compare`, trading duplicate work for no
+prevalidated-table bypass of the public comparison contract.

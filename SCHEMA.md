@@ -96,6 +96,32 @@ policy failures. `completed,false` and `policy_failure,false` are both scored
 failures but remain separate status categories. Records are caller-classified;
 the package cannot validate whether that classification was experimentally correct.
 
+## Validation diagnostics
+
+`validate --max-errors N` collects one error per rejected record (default 20,
+range 1–100 displayed errors). It scans every parsed record, returning exit 2
+and JSON on standard error with `input_valid: false`, `error_count`, `errors`,
+`errors_truncated` and `pairing_checks: skipped` when any are rejected. Each
+diagnostic includes `record` (1-based, excluding the header), `csv_line_end`
+(the ending physical CSV line), an `error` message, and well-formed
+`revision`/`slice`/`case` IDs when available. Invalid cell contents are not echoed.
+Treat identifiers and paths as potentially confidential even in diagnostics.
+
+The limit bounds displayed diagnostics, not scanning. Only the first detected
+error per record is counted; repairing it may reveal another. Duplicate triples
+among otherwise valid rows are rejected. Duplicate checks do not use rejected
+rows; fixing an earlier bad record can therefore also
+reveal a duplicate on another record. Cross-arm identity and physical-start
+alias checks run only after all rows pass; these checks still fail fast. Parsing,
+manifest and population-limit failures also fail fast, without an `errors` list.
+A malformed CSV record can have a location even when parsing stops. No invalid
+input produces a comparison or a partial table. There is no auto-repair mode.
+
+`compare` remains fail-fast, adding location details for rejected records. The
+Python API raises `EvidenceError` (still a `ValueError`) with a readable message
+and additive `details` dictionary; it has record numbers but no file line mapping.
+Diagnostics do not alter report/input schema versions or validated evidence.
+
 ## Output bundle
 
 `manifest.input.json` and `episodes.input.csv` preserve exact source bytes.
@@ -123,6 +149,34 @@ are bounded during parsing, before comparison. JSON retains all declared cases;
 Markdown shows at most 50 changed/unresolved cases and 10 missing-ID examples
 per slice, with explicit notices pointing to the complete JSON. Input limits do
 not imply equally small outputs or protection against hostile local workloads.
+
+## Case selection view
+
+`cases --manifest FILE --episodes FILE` validates and analyzes the full inputs,
+then selects cases for display. It does not read an existing report or bypass
+validation of rows outside the filter. Optional repeatable `--slice ID` and
+`--transition NAME` select the displayed cases; transitions are `lost`, `gained`,
+`unresolved` (the defaults), `retained_success` and `shared_failure`. Unknown or
+duplicate filter values are rejected. `--limit` is a global display cap, 1–10000,
+default 100. Results preserve declared slice/case order, not severity ranking.
+
+The JSON view has `case_view_schema_version: 1`, `status: cases_selected`,
+`comparison` (full report-level summaries, source hashes and limitations),
+`slices` (every declared slice's unfiltered evidence and inference, plus
+`selected_for_display`, `matching_cases`, `shown_cases`), `selection` (normalized
+filters, limit, matching/shown/omitted counts, `truncated`) and `cases` (selected
+case records with their slice IDs). The full manifest remains in the input;
+this projection is not a replacement evidence bundle. Copying only `cases`
+discards context. An empty selection is not proof of no regressions elsewhere.
+The case-view version governs the selection metadata and wrapping structure;
+inherited comparison, slice and case-record fields follow
+`comparison.report_schema_version`. Consumers must check both versions. The
+`comparison` object is a summary projection, not a full report with a manifest.
+
+Filtering changes no denominator, alpha correction, inference or strict-coverage
+decision. All these refer to the full declared comparison. This is exploratory
+triage, not an outcome-selected confirmatory test or release gate. Exit 3 with
+`--strict-coverage` still emits the view when required full coverage is incomplete.
 
 ## Read-only bundle checks
 

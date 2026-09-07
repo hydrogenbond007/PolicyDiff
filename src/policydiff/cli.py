@@ -10,7 +10,8 @@ from .bundle import verify_bundle, write_bundle
 from .demo import fixture
 from .engine import compare
 from .io import csv_bytes, encode, load_inputs, parse_csv, parse_manifest, sha256
-from .schema import EvidenceError
+from .schema import EvidenceError, validate_manifest, validate_rows
+from .triage import TRANSITIONS, select_cases
 
 
 def _discard_broken_pipe(stream):
@@ -31,23 +32,42 @@ def _emit_error(error):
         pass  # The exit code remains meaningful when diagnostics cannot be delivered.
 
 
+def _error_limit(value):
+    try:
+        number = int(value)
+    except ValueError:
+        number = 0
+    if not 1 <= number <= 100:
+        raise argparse.ArgumentTypeError('must be an integer from 1 to 100')
+    return number
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--version', action='version', version=__version__)
     sub = parser.add_subparsers(dest='command', required=True)
-    for name in ('compare', 'validate'):
+    for name in ('compare', 'validate', 'cases'):
         command = sub.add_parser(name)
         command.add_argument('--manifest', required=True, type=Path)
         command.add_argument('--episodes', required=True, type=Path)
         command.add_argument('--strict-coverage', action='store_true', help='exit 3 if any required slice lacks outcomes in any declared arm (including retest if declared)')
         if name == 'compare':
             command.add_argument('--output', type=Path, help='new directory; omitted writes report JSON to stdout')
+        elif name == 'validate':
+            command.add_argument('--max-errors', type=_error_limit, default=20,
+                                 help='maximum diagnostics displayed (1–100); all records are checked')
+        else:
+            command.add_argument('--slice', dest='slice_ids', action='append', help='display this declared slice; repeatable')
+            command.add_argument('--transition', choices=TRANSITIONS, action='append',
+                                 help='display this transition; repeatable; default lost, gained, unresolved')
+            command.add_argument('--limit', type=int, default=100, help='maximum displayed cases (1–10000); default 100')
     demo = sub.add_parser('demo', help='generate explicitly synthetic inputs and a report')
     demo.add_argument('--output', required=True, type=Path)
     verify = sub.add_parser('verify', help='check a saved bundle; not a policy pass or authenticity check')
     verify.add_argument('--bundle', required=True, type=Path)
     args = parser.parse_args(argv)
     completed_result = {}
+    record_lines = []
     try:
         if args.command == 'verify':
             result = verify_bundle(args.bundle)
@@ -61,11 +81,17 @@ def main(argv=None):
             inputs = {'manifest_sha256': sha256(snapshots['manifest.input.json']),
                       'episodes_sha256': sha256(snapshots['episodes.input.csv'])}
         else:
-            manifest, rows, inputs, snapshots = load_inputs(args.manifest, args.episodes)
+            manifest, rows, inputs, snapshots = load_inputs(args.manifest, args.episodes, record_lines=record_lines)
+        if args.command == 'validate':
+            validate_manifest(manifest)
+            validate_rows(manifest, rows, max_errors=args.max_errors)
         report = compare(manifest, rows)
         report['inputs'] = inputs
-        report['producer'] = {'name': 'policydiff', 'version': __version__}
-        if args.command == 'validate':
+        if args.command == 'cases':
+            result = select_cases(report, slice_ids=args.slice_ids, transitions=args.transition, limit=args.limit)
+            completed_result = {'command': 'cases', 'result_status': 'cases_selected'}
+            sys.stdout.write(encode(result).decode())
+        elif args.command == 'validate':
             completed_result = {'command': 'validate', 'result_status': 'inputs_validated'}
             print(json.dumps({key: report[key] for key in ('input_valid', 'evidence_origin', 'required_coverage_complete', 'coverage_counts')}))
         elif args.output:
@@ -85,6 +111,12 @@ def main(argv=None):
         if isinstance(exc, BrokenPipeError):
             _discard_broken_pipe(sys.stdout)
         error = {'status': 'invalid_input_or_output', 'error': str(exc)[:1000]}
+        if isinstance(exc, EvidenceError):
+            error.update(exc.details)
+            for item in error.get('errors', [error]):
+                index = item.get('record', 0)
+                if 0 < index <= len(record_lines):
+                    item['csv_line_end'] = record_lines[index - 1]
         if completed_result:
             error.update(status='output_notification_failed', **completed_result)
         _emit_error(error)

@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Portable, offline packaging checks; build tools must already be installed."""
 import argparse
+import csv
 from datetime import datetime, timezone
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
@@ -191,6 +193,30 @@ raise SystemExit(0 if result.wasSuccessful() else 1)
         run('installed-compare', cli + ['compare'] + inputs + ['--output', str(out / 'comparison')])
         run('installed-verify', cli + ['verify', '--bundle', str(out / 'demo')])
         run('installed-console-verify', [console, 'verify', '--bundle', str(out / 'comparison')])
+        view_args = ['cases'] + inputs + ['--slice', 'old-camera', '--transition', 'lost', '--limit', '2']
+        view = json.loads(run('installed-cases', cli + view_args).stdout)
+        console_view = json.loads(run('installed-console-cases', [console] + view_args).stdout)
+        if view != console_view or view['selection']['shown_cases'] != 2 or not view['selection']['truncated']:
+            raise RuntimeError('installed case-selection entry points disagree or hide truncation')
+        if len(view['slices']) != 6 or view['comparison']['observed_totals']['declared_pairs'] != 72:
+            raise RuntimeError('case selection changed the full comparison population')
+        run('case-view-strict-missingness', cli + view_args + ['--strict-coverage'], expected=3)
+        run('installed-cases-unknown-slice', cli + ['cases'] + inputs + ['--slice', 'nope'], expected=2)
+        run('installed-cases-invalid-limit', cli + ['cases'] + inputs + ['--limit', '0'], expected=2)
+        demo_rows = list(csv.DictReader(io.StringIO((out / 'demo/episodes.input.csv').read_text(encoding='utf-8'))))
+        for row in demo_rows[:2]:
+            row['success'] = 'invalid'
+        bad_csv = out / 'invalid-episodes.csv'
+        with bad_csv.open('w', newline='', encoding='utf-8') as handle:
+            writer = csv.DictWriter(handle, fieldnames=demo_rows[0].keys())
+            writer.writeheader()
+            writer.writerows(demo_rows)
+        diagnostic_args = ['validate', '--manifest', str(out / 'demo/manifest.input.json'),
+                           '--episodes', str(bad_csv), '--max-errors', '1']
+        diagnostics = json.loads(run('installed-diagnostics', cli + diagnostic_args, expected=2).stderr)
+        console_diagnostics = json.loads(run('installed-console-diagnostics', [console] + diagnostic_args, expected=2).stderr)
+        if diagnostics != console_diagnostics or diagnostics['error_count'] != 2 or not diagnostics['errors_truncated']:
+            raise RuntimeError('installed diagnostics disagree or lose errors')
         run('strict-missingness', cli + ['validate'] + inputs + ['--strict-coverage'], expected=3)
         run('refuse-overwrite', cli + ['demo', '--output', str(out / 'demo')], expected=2)
         for path in (out / 'demo').iterdir():

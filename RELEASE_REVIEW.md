@@ -149,3 +149,46 @@ Concurrency races under hostile local filesystem mutation, power-loss durability
 cryptographic authentication, licensing and hosted CI are not established by these
 changes. No gate was relaxed, unsupported robot mode added or scientific claim
 expanded. The final local tests/installed checks are engineering evidence only.
+
+## dev3 import diagnostics and case triage
+
+Three additional native Claude Opus 5 source inspections covered design priority,
+diagnostic implementation and triage/architecture/closure. Actual response model
+identity was checked; the reviewers did not execute tests. Raw receipts and
+payloads stay outside this repository. Recommendations were tested, not accepted
+as automatic approval or evidence of a moat.
+
+Accepted: locate rejected records, bound displayed diagnostics while counting
+all rejected records, name unknown fields safely, and add a small case-selection
+command. A malformed/oversize/multiline header was initially mislabelled as an
+episode record; reproduced on Python 3.10 and 3.12, then fixed with an explicit
+header-validation boundary. A claimed stale CSV line after blank rows did not
+reproduce on either version: DictReader's fieldnames property refreshes it. An
+explicit underlying-reader line reference now makes the intended meaning clearer,
+but this is not counted as a reproduced bug fix.
+
+Retest coverage remains pair coverage, not just retest-arm execution. Physical
+aliases remain prohibited within a slice, not across different slice contracts.
+These were already documented and tested; neither was changed to satisfy a review.
+
+`cases` validates and analyzes all inputs before selecting displayed records.
+Every slice summary, full-population denominator, inference result, coverage
+decision and source hash is retained. Display limits expose matching/shown/omitted
+counts, including when earlier cases consume the limit for a later slice. Invalid
+unselected data still fails. No saved-report trust path, importer, ranking,
+statistical feature or dependency was added. The view envelope and inherited
+report fields have explicit separate version semantics.
+
+Closure accepted documentation of argparse's non-JSON usage errors, full-analysis
+cost on every invocation, and additional installed-command negative tests.
+Validating twice for diagnostic collection is an acknowledged constant-factor
+cost, not a reason to expose a prevalidated-table bypass. Further feature expansion
+needs a demonstrated user workflow, not another generic platform narrative.
+
+Local checks: the original 137 tests remain, with diagnostic/triage adversarial
+coverage added; clean offline installed-package verification exercises module
+and console commands on Python 3.10 and 3.12. A separate 200-comparison synthetic
+differential check against installed dev2 found identical full reports after
+normalizing only producer.version, including 40 synthetic inference-branch cases.
+Those are software fixtures, not new simulator or hardware observations. Final
+source inventory/hashes are checked again before the commit; hosted CI is separate.

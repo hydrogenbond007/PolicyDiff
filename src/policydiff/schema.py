@@ -20,6 +20,10 @@ COLUMNS = ("revision", "slice", "case", "status", "success", "checkpoint_sha256"
 class EvidenceError(ValueError):
     """Input cannot support the declared comparison contract."""
 
+    def __init__(self, message, *, details=None):
+        super().__init__(message)
+        self.details = details or {}
+
 
 def require(condition, message):
     if not condition:
@@ -43,7 +47,11 @@ def identifier(value, label):
 def fields(value, required, optional=(), label="object"):
     require(isinstance(value, dict), f"{label} must be an object")
     require(set(required) <= set(value), f"{label} missing fields: {sorted(set(required) - set(value))}")
-    require(set(value) <= set(required) | set(optional), f"{label} contains unknown fields")
+    extra = set(value) - set(required) - set(optional)
+    if extra:
+        names = sorted(ascii(key)[:80] for key in extra)
+        raise EvidenceError(f"{label} contains unknown fields: {', '.join(names[:10])}"
+                            + (f" (+{len(names) - 10} more)" if len(names) > 10 else ""))
 
 
 def sha(value, label):
@@ -162,47 +170,75 @@ def _optional_number(value, label, integral=False):
     return number
 
 
-def validate_rows(manifest, rows):
+def _validate_row(raw, policies, slices):
+    fields(raw, COLUMNS, label="episode row")
+    row = dict(raw)
+    for key in ("revision", "slice", "case"):
+        identifier(row[key], key)
+    require(row["revision"] in policies, "undeclared revision")
+    require(row["slice"] in slices, "undeclared slice")
+    sl = slices[row["slice"]]
+    require(row["case"] in sl["case_ids"], "undeclared case ID")
+    require(row["status"] in STATUSES, "unknown terminal status")
+    if row["status"] in OUTCOMES:
+        require(type(row["success"]) is bool or (isinstance(row["success"], str) and row["success"] in ("0", "1", "true", "false")), "outcome success must be an explicit Boolean or 0/1/true/false")
+        row["success"] = row["success"] is True or row["success"] in ("1", "true")
+        require(row["status"] != "policy_failure" or not row["success"], "policy_failure cannot be successful")
+    else:
+        require(row["success"] is None or row["success"] == "", "infrastructure/interrupted records cannot carry scored success")
+        row["success"] = None
+    for field, expected in (("checkpoint_sha256", policies[row["revision"]]["checkpoint_sha256"]),
+                            ("contract_sha256", sl["contract_sha256"])):
+        if row["status"] in OUTCOMES or row[field] not in ("", None):
+            require(sha(row[field], field) == expected, f"{field} disagrees with declared revision/slice")
+    for field in ("physical_state_sha256", "rng_sha256"):
+        if row["status"] in OUTCOMES or row[field] not in ("", None):
+            sha(row[field], field)
+    row["steps"] = _optional_number(row["steps"], "steps", integral=True)
+    row["wall_seconds"] = _optional_number(row["wall_seconds"], "wall_seconds")
+    require(row["steps"] is None or row["steps"] <= sl["horizon_steps"], "steps exceed the declared slice horizon")
+    ref = row["evidence_ref"]
+    require(isinstance(ref, str), "evidence_ref must be a relative path string or empty")
+    if ref:
+        text(ref, "evidence_ref", 512)
+        require(not PurePosixPath(ref).is_absolute() and ".." not in PurePosixPath(ref).parts
+                and ":" not in ref and "\\" not in ref, "evidence_ref must be a contained relative reference, not a URL")
+    return row
+
+
+def validate_rows(manifest, rows, *, max_errors=None):
+    """Never return a partial table. Optional diagnostics collect one error per bad record."""
     require(isinstance(rows, list), "rows must be a list")
+    if max_errors is not None:
+        integer(max_errors, "max_errors", 1, 100)
     policies = {r["id"]: r for r in revisions(manifest)}
     slices = {sl["id"]: sl for sl in manifest["slices"]}
     require(len(rows) <= sum(len(sl["case_ids"]) for sl in slices.values()) * len(policies), "too many rows")
-    table = {}
-    for raw in rows:
-        fields(raw, COLUMNS, label="episode row")
-        row = dict(raw)
-        for key in ("revision", "slice", "case"):
-            identifier(row[key], key)
-        require(row["revision"] in policies and row["slice"] in slices, "undeclared revision or slice")
-        sl = slices[row["slice"]]
-        require(row["case"] in sl["case_ids"], "undeclared case ID")
-        key = row["revision"], row["slice"], row["case"]
-        require(key not in table, f"duplicate episode: {key}")
-        require(row["status"] in STATUSES, "unknown terminal status")
-        if row["status"] in OUTCOMES:
-            require(type(row["success"]) is bool or (isinstance(row["success"], str) and row["success"] in ("0", "1", "true", "false")), "outcome success must be an explicit Boolean or 0/1/true/false")
-            row["success"] = row["success"] is True or row["success"] in ("1", "true")
-            require(row["status"] != "policy_failure" or not row["success"], "policy_failure cannot be successful")
-        else:
-            require(row["success"] is None or row["success"] == "", "infrastructure/interrupted records cannot carry scored success")
-            row["success"] = None
-        for field, expected in (("checkpoint_sha256", policies[row["revision"]]["checkpoint_sha256"]),
-                                ("contract_sha256", sl["contract_sha256"])):
-            if row["status"] in OUTCOMES or row[field] not in ("", None):
-                require(sha(row[field], field) == expected, f"{field} disagrees with declared revision/slice")
-        for field in ("physical_state_sha256", "rng_sha256"):
-            if row["status"] in OUTCOMES or row[field] not in ("", None):
-                sha(row[field], field)
-        row["steps"] = _optional_number(row["steps"], "steps", integral=True)
-        row["wall_seconds"] = _optional_number(row["wall_seconds"], "wall_seconds")
-        require(row["steps"] is None or row["steps"] <= sl["horizon_steps"], "steps exceed the declared slice horizon")
-        ref = row["evidence_ref"]
-        require(isinstance(ref, str), "evidence_ref must be a relative path string or empty")
-        if ref:
-            text(ref, "evidence_ref", 512)
-            require(not PurePosixPath(ref).is_absolute() and ".." not in PurePosixPath(ref).parts
-                    and ":" not in ref and "\\" not in ref, "evidence_ref must be a contained relative reference, not a URL")
-        table[key] = row
+    table, errors, error_count = {}, [], 0
+    for index, raw in enumerate(rows, 1):
+        try:
+            row = _validate_row(raw, policies, slices)
+            key = row["revision"], row["slice"], row["case"]
+            require(key not in table, f"duplicate episode: {key}")
+            table[key] = row
+        except EvidenceError as exc:
+            location = {"record": index}
+            if isinstance(raw, dict):
+                for name in ("revision", "slice", "case"):
+                    value = raw.get(name)
+                    if isinstance(value, str) and len(value) <= 80 and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", value):
+                        location[name] = value
+            message = f"episode record {index}: {exc}"
+            if max_errors is None:
+                raise EvidenceError(message, details=location) from exc
+            error_count += 1
+            if len(errors) < max_errors:
+                errors.append(dict(location, error=message))
+    if error_count:
+        message = errors[0]['error'] if error_count == 1 else f"{error_count} invalid episode records"
+        raise EvidenceError(message, details={
+            "input_valid": False, "error_count": error_count, "errors": errors,
+            "errors_truncated": error_count > len(errors), "pairing_checks": "skipped"})
     for sl in slices.values():
         seen_physical = set()
         for case in sl["case_ids"]:

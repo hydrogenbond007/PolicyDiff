@@ -33,6 +33,11 @@ PYTHONPATH=src python3 -m policydiff validate \
 
 PYTHONPATH=src python3 -m policydiff verify --bundle demo-output
 
+PYTHONPATH=src python3 -m policydiff cases \
+  --manifest demo-output/manifest.input.json \
+  --episodes demo-output/episodes.input.csv \
+  --slice old-camera --transition lost --limit 10
+
 PYTHONPATH=src python3 -m policydiff compare \
   --manifest demo-output/manifest.input.json \
   --episodes demo-output/episodes.input.csv \
@@ -53,6 +58,16 @@ evidence references, authenticate the author or prove any robot episode happened
 Coordinated rewrites of files and receipt can pass. Extra files in the directory
 are outside the check. Use `validate` for the input contract and `compare` to
 reanalyze saved inputs; neither runs a robot.
+
+`cases` writes a focused JSON view to standard output. By default it lists lost,
+gained and unresolved cases; repeat `--slice` or `--transition` to select several.
+The default limit is 100 displayed cases, with exact matching/shown/omitted counts.
+All slice summaries, full-population counts and inference limits stay visible,
+even when only losses in one slice are selected. Filtering never recomputes
+statistics on the chosen outcomes. Unknown filters fail instead of returning a
+misleading empty result. This command validates and compares the entire supplied
+manifest/CSV first; it does not trust an existing `report.json` or open traces.
+Each invocation repeats that full analysis, even when only a display filter changes.
 
 ## What the first version does
 
@@ -112,6 +127,21 @@ There is no automatic importer yet. Unknown training exposure, mixed updates,
 repeated starts and real hardware can fall outside this contract; see the schema
 before investing in an export. This does not audit the runner or its success labels.
 
+### Debug an export
+
+`validate` reports the first error in each rejected episode record, with the
+1-based record number, its ending physical CSV line and any well-formed case IDs.
+It scans all records but displays at most 20 diagnostics; use `--max-errors 5`
+to change that limit (1–100). `error_count` counts rejected records, not every
+possible defect. `errors_truncated` makes omitted diagnostics explicit. No values
+are repaired and no partial comparison is produced.
+
+Manifest/CSV parsing errors stop immediately. If episode records are invalid,
+cross-arm identity and physical-alias checks are explicitly `pairing_checks:
+skipped`; fix the records and validate again. `compare` and the Python API remain
+fail-fast. Record numbers exclude the header; CSV lines can differ because quoted
+fields may span lines. See [diagnostic semantics](SCHEMA.md#validation-diagnostics).
+
 The broader category is not unoccupied: [RoboLens](https://www.robolens.to/)
 advertises policy-regression and release workflows, while
 [Inspect Robots](https://github.com/robocurve/inspect-robots) provides an evaluation
@@ -146,10 +176,14 @@ Exit codes:
 
 | Code | Meaning |
 | --- | --- |
-| 0 | Command succeeded (validate, compare, demo or verify); **not** a policy pass |
+| 0 | Command succeeded; **not** a policy pass |
 | 2 | Invalid input or output error |
 | 3 | `--strict-coverage` was requested and required coverage is incomplete |
 | 4 | Internal software error; not an input rejection or policy failure |
+
+Command-line usage errors (missing flags, malformed values or invalid choices)
+also exit 2, but print usage text rather than JSON. Do not assume every exit-2
+response is machine-readable diagnostics.
 
 An incomplete report is useful evidence and is still written with strict coverage.
 An output error can also occur **after** a bundle finished, for example when a
