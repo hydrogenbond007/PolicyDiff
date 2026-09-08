@@ -1,9 +1,10 @@
 # Developer-preview review log
 
-Latest continuation: see the dev7 section of [release review](RELEASE_REVIEW.md)
-for public-source Kimi/Opus5 architecture pairing, local executor adversarial
-findings and verification scope. Those native passes did not inspect private implementation; code
-review clearance remains pending. The initial implementation record below is historical.
+Latest continuation: see the dev8 section of [release review](RELEASE_REVIEW.md)
+for user-approved native Claude Opus 5 implementation reviews, scoped fixes and
+local verification. Earlier public-only passes and pending-clearance notes are
+historical; this approval covers the selected package source/tests/docs only.
+The initial implementation record below is historical.
 
 Three substantive Claude Code reviews have been received: contract review,
 implementation review and patch-closure review. All used the signed-in Claude subscription, requested

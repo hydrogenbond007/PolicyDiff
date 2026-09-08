@@ -105,6 +105,21 @@ class LogInspectionTests(unittest.TestCase):
         del log['results']['errored_trials']
         self.assertIsNone(inspect(log)['declared_counts']['errored_trials'])
 
+    def test_error_counters_do_not_imply_empty_score_records(self):
+        log = fixture()
+        log['samples'][0]['epochs'] = [{'success_at_end': 0.0}, {'success_at_end': 0.0}]
+        log['results']['errored_trials'] = 2
+        result = inspect(log)
+        self.assertEqual(result['observed_counts']['empty_epoch_records'], 0)
+        self.assertEqual(result['declared_counts']['errored_trials'], 2)
+        self.assertEqual(result['accounting']['issues'], [])
+
+    def test_error_counter_cannot_exceed_declared_trials(self):
+        log = fixture()
+        log['results']['errored_trials'] = 3
+        self.assertEqual(inspect(log)['accounting']['issues'],
+                         ['declared_errors_exceed_declared_trials'])
+
     def test_started_log_can_have_an_active_placeholder(self):
         log = fixture()
         log['status'] = log['samples'][0]['status'] = 'started'
@@ -112,6 +127,7 @@ class LogInspectionTests(unittest.TestCase):
         log['results']['errored_trials'] = 0
         result = inspect(log)
         self.assertEqual(result['accounting']['scope'], 'in_progress')
+        self.assertIn('active epoch', result['accounting']['note'])
         self.assertIn('declared_trial_count_differs_from_recorded_epochs', result['accounting']['issues'])
         self.assertEqual(result['observed_counts']['epoch_records'], 2)
 
@@ -147,10 +163,11 @@ class LogInspectionTests(unittest.TestCase):
 
     def test_terminal_counter_mismatches_remain_visible_without_repair(self):
         log = fixture()
-        log['results'].update(total_scenes=2, total_trials=4, errored_trials=3)
+        log['results'].update(total_scenes=2, total_trials=4, errored_trials=5)
         before = deepcopy(log)
         result = inspect(log)
         self.assertEqual(result['accounting']['scope'], 'terminal')
+        self.assertNotIn('active epoch', result['accounting']['note'])
         self.assertEqual(len(result['accounting']['issues']), 3)
         self.assertEqual(result['declared_counts']['total_trials'], 4)
         self.assertEqual(result['observed_counts']['epoch_records'], 2)

@@ -103,8 +103,9 @@ unknown annotations, not claiming full upstream-schema validation. The CLI hashe
 one bounded JSON read; it follows no sidecars and emits no outcome manifest.
 Source-specific shape checks stay in this module, not in the evidence schema.
 
-Report and manifest schema versions are independent. The library always emits a
-producer and nullable source inputs, and the CLI fills source hashes. Versioning
+Report and manifest schema versions are independent. Comparison and inspection
+results emit a producer and nullable source inputs; the CLI fills source hashes.
+The catalogue identifies its pinned upstream source and reads no input files. Versioning
 uses one literal source in `_version.py`; release checks compare it with installed
 metadata. Same-build/interpreter/platform byte reproducibility is tested, not
 asserted across different floating-point libraries or unpublished code revisions.

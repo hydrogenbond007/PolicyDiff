@@ -138,8 +138,8 @@ def inspect_log(log, *, source_format):
     if declared['total_trials'] != epoch_count:
         issues.append('declared_trial_count_differs_from_recorded_epochs')
     errored = declared['errored_trials']
-    if errored is not None and (errored > declared['total_trials'] or errored > empty_count):
-        issues.append('declared_errors_exceed_declared_trials_or_empty_epochs')
+    if errored is not None and errored > declared['total_trials']:
+        issues.append('declared_errors_exceed_declared_trials')
     return {
         'log_inspection_schema_version': 1, 'status': 'log_inspected',
         'producer': {'name': 'policydiff', 'version': __version__}, 'inputs': None,
@@ -154,7 +154,9 @@ def inspect_log(log, *, source_format):
                             'empty_epoch_records': empty_count,
                             'operator_scores_without_recorded_judgement': operator_without_judgement},
         'accounting': {'scope': 'in_progress' if status == 'started' else 'terminal', 'issues': issues,
-                       'note': 'Live logs may include an active epoch before the completed-trial counter advances; mismatches are not automatically corruption.'},
+                       'note': ('Live logs may include an active epoch before the completed-trial counter advances; mismatches are not automatically corruption.'
+                                if status == 'started' else
+                                'Terminal-log count differences require source investigation; this inventory does not infer their cause.')},
         'annotation_coverage': {name: {'non_null_epochs': annotation_counts[name],
                                       'unannotated_epochs': epoch_count - annotation_counts[name]}
                                 for name in ANNOTATIONS},

@@ -153,6 +153,65 @@ class ExecutionTests(unittest.TestCase):
         self.assertIn('plan changed', result['error'])
         self.assertFalse((self.root / 'out/comparison').exists())
 
+    def test_empty_integrity_exception_still_aborts_without_comparison(self):
+        real_hashes = execution.runner_hashes
+        with patch.object(execution, 'runner_hashes', side_effect=[real_hashes(), OSError()]):
+            result = self.run_fake()
+        self.assertEqual(result['status'], 'evaluation_aborted')
+        self.assertEqual(result['recorded_trials'], 0)
+        self.assertFalse(result['execution_clean'])
+        self.assertFalse((self.root / 'out/comparison').exists())
+
+    def test_empty_integrity_exception_after_last_cell_does_not_publish(self):
+        real_hashes = execution.runner_hashes
+        # Planning, two checks per completed cell, then the final post-cell check.
+        with patch.object(execution, 'runner_hashes', side_effect=[real_hashes()] * 12 + [OSError()]):
+            result = self.run_fake()
+        self.assertEqual(result['status'], 'evaluation_aborted')
+        self.assertEqual(result['recorded_trials'], 6)
+        self.assertFalse(result['execution_clean'])
+        self.assertFalse((self.root / 'out/comparison').exists())
+
+    def test_automatic_child_reaping_is_rejected_before_admission(self):
+        with patch.object(execution.signal, 'getsignal', return_value=execution.signal.SIG_IGN), \
+                self.assertRaisesRegex(EvidenceError, 'SIGCHLD'):
+            self.run_fake()
+        self.assertFalse((self.root / 'out').exists())
+
+    def test_unrestorable_term_handler_is_rejected_before_admission(self):
+        def handler(signum):
+            return None if signum == execution.signal.SIGTERM else execution.signal.SIG_DFL
+        with patch.object(execution.signal, 'getsignal', side_effect=handler), \
+                self.assertRaisesRegex(EvidenceError, 'restorable'):
+            self.run_fake()
+        self.assertFalse((self.root / 'out').exists())
+
+    def test_per_trial_preflight_failure_publishes_abort_and_keeps_prior_rows(self):
+        def changed(*args, **kwargs):
+            if args[1] == 2:
+                raise EvidenceError('preflight changed between trials')
+            return self.fake_trial(*args, **kwargs)
+        result = self.run_fake(changed)
+        self.assertEqual(result['status'], 'evaluation_aborted')
+        self.assertEqual(result['recorded_trials'], 2)
+        self.assertFalse(result['execution_clean'])
+        self.assertFalse((self.root / 'out/comparison').exists())
+        self.assertEqual(json.loads((self.root / 'out/evaluation.json').read_text()), result)
+        progress = json.loads((self.root / 'out/progress.json').read_text())
+        self.assertEqual(progress['recorded_trials'], 2)
+        self.assertFalse((self.root / 'out/trials/0002').exists())
+
+    def test_unreadable_process_inventory_is_rejected_before_admission(self):
+        with patch.object(execution.os, 'scandir', side_effect=PermissionError('synthetic proc access')), \
+                self.assertRaisesRegex(EvidenceError, '/proc'):
+            self.run_fake()
+        self.assertFalse((self.root / 'out').exists())
+
+    def test_unsupported_process_supervision_fails_before_any_admission(self):
+        with patch.object(execution.sys, 'platform', 'darwin'), self.assertRaisesRegex(EvidenceError, 'Linux'):
+            self.run_fake()
+        self.assertFalse((self.root / 'out').exists())
+
     def test_input_drift_preserves_raw_outcome_but_refuses_comparison(self):
         def changed(*args, **kwargs):
             return dict(self.fake_trial(*args, **kwargs), integrity_error='synthetic input drift')

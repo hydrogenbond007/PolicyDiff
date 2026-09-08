@@ -107,3 +107,38 @@ class ExecutionRecordTests(unittest.TestCase):
         self.assertTrue(collected['success'])
         self.assertIn('integrity_error', collected)
         self.assertIn('cleanup_error', collected)
+
+    def test_worker_diagnostic_survives_missing_or_corrupt_final_record(self):
+        original = 'x' * 2048
+        result = dict(self.result, cleanup_error=original)
+        atomic_write(self.root / 'terminal.json', encode(receipt('a' * 64, 0, result, 'synthetic-admission')))
+        for corrupt in (False, True):
+            with self.subTest(corrupt=corrupt):
+                if corrupt:
+                    (self.root / 'result.json').write_text('{')
+                collected = collect_receipts(self.root, 'a' * 64, 0, 20, 'synthetic-admission')
+                self.assertTrue(collected['success'])
+                self.assertEqual(collected['cleanup_error'], original)
+                if corrupt:
+                    self.assertIn('result.json:', collected['receipt_errors'][0])
+                else:
+                    self.assertEqual(collected['receipt_errors'], ['worker_receipt_incomplete'])
+
+    def test_final_receipt_cannot_erase_terminal_cleanup_fault(self):
+        terminal = dict(self.result, cleanup_error='terminal fault')
+        for name, record in (('terminal.json', terminal), ('result.json', self.result)):
+            atomic_write(self.root / name, encode(receipt('a' * 64, 0, record, 'synthetic-admission')))
+        collected = collect_receipts(self.root, 'a' * 64, 0, 20, 'synthetic-admission')
+        self.assertTrue(collected['success'])
+        self.assertEqual(collected['cleanup_error'], 'terminal fault')
+        self.assertEqual(collected['receipt_cleanup_errors'], {'terminal.json': 'terminal fault'})
+
+    def test_distinct_worker_cleanup_diagnostics_are_both_preserved(self):
+        diagnostics = {'terminal.json': 'x' * 2048, 'result.json': 'y' * 2048}
+        for name, diagnostic in diagnostics.items():
+            record = dict(self.result, cleanup_error=diagnostic)
+            atomic_write(self.root / name, encode(receipt('a' * 64, 0, record, 'synthetic-admission')))
+        collected = collect_receipts(self.root, 'a' * 64, 0, 20, 'synthetic-admission')
+        self.assertTrue(collected['success'])
+        self.assertEqual(collected['receipt_cleanup_errors'], diagnostics)
+        self.assertEqual(collected['cleanup_error'], diagnostics['result.json'])

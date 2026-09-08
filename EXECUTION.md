@@ -49,9 +49,17 @@ proof that a model or its preprocessing is correct.
 
 ## Configure an evaluation
 
-Activate an existing compatible LIBERO environment (experimental runtime:
-robosuite 1.4.1, with NumPy, PyTorch, MuJoCo and LIBERO's dependencies installed),
-and install PolicyDiff there. No dependency/model/dataset download is automatic.
+Execution requires Linux with `waitid`/`WNOWAIT` and readable `/proc` process
+metadata for owned-group cleanup. Activate an existing compatible LIBERO environment
+(experimental runtime: robosuite 1.4.1, with NumPy, PyTorch, MuJoCo and LIBERO's
+dependencies installed), and install PolicyDiff there. No dependency/model/dataset
+download is automatic.
+The worker uses EGL rendering and a package-local `PYTHONPATH`; install adapter
+dependencies into this interpreter rather than relying on inherited `PYTHONPATH`.
+OSMesa/GLX-only execution is not supported by this experimental runner.
+Use default `SIGCHLD` handling and do not independently reap PolicyDiff's worker
+children; the supervisor must retain their identities until group cleanup finishes.
+An externally installed, non-restorable SIGTERM handler is rejected before admission.
 Paths in this configuration are relative to the configuration file:
 
 ```json
@@ -118,6 +126,10 @@ The per-worker operational cap includes loading, reset, execution and cleanup;
 it is not a task-success deadline. Timeouts are interruptions. Cleanup faults
 cannot erase a terminal outcome already recorded. Infrastructure/cleanup faults
 stop further admissions and preserve partial data; no automatic retries/resume.
+Cleanup allows up to one additional second to reap the leader. Signalling/reaping
+failures remain explicit faults and can leave processes alive; no later signalling
+is authorized merely by a saved PID. Helpers that escape the owned group are outside
+this lifecycle guarantee.
 Known pairing mismatches abort without a comparison report.
 Ctrl-C or SIGTERM during main-thread CLI worker supervision stops that owned group and records an interruption
 or preserves its already recorded terminal outcome, then stops admissions. Abrupt
@@ -137,6 +149,13 @@ fields, wrong identities and impossible outcome/step combinations. A valid saved
 terminal outcome survives a malformed or absent final record, with an explicit
 execution fault. Conflicting records abort the comparison rather than selecting
 one. IDs/hashes detect ordinary mixups, not a malicious adapter or forged evidence.
+Supervisor fault codes and a bounded diagnostic are recorded separately under
+`supervisor`, preserving any original worker/receipt `cleanup_error`.
+Missing/malformed transport diagnostics use `receipt_errors` alongside the original
+worker diagnostic, without truncating it. These are supervisor-side additions,
+not new fields in the worker receipt schema.
+`receipt_cleanup_errors` retains each valid receipt's worker diagnostic; a final
+record cannot erase a terminal cleanup fault by omitting it.
 
 The measured endpoint is checkpointed before the potentially slow seal scan;
 `input_integrity: pending` is not verified evidence. The terminal checkpoint is
@@ -162,5 +181,6 @@ retain `evaluation.json` and the trial evidence with it.
 Preview limits: 100 selected tasks, 300 total trials, 10000 policy steps per trial,
 1–3600 seconds per worker and a 1 MiB log stop threshold. Polling permits transient
 runtime/log-size overshoot; final checks still flag fast-exit overshoots. Neither
-limit is a hard realtime/storage guarantee. POSIX process-group supervision is
-required. Listing 130 tasks does not establish execution validation across all 130.
+limit is a hard realtime/storage guarantee. Linux process-group supervision is
+required; analysis and catalogue commands do not require it. Listing 130 tasks
+does not establish execution validation across all 130.

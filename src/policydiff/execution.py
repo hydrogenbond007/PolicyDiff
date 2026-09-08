@@ -22,6 +22,44 @@ from .schema import COLUMNS, ROLES, EvidenceError, fields, integer, require, tex
 
 ABI = 'libero-panda-rgb128-proprio-osc7-v1'
 MAX_TRIALS = 300
+MAX_PROCESS_SCAN = 65536
+
+
+def _require_supervision():
+    require(sys.platform.startswith('linux') and all(hasattr(os, name) for name in
+            ('waitid', 'P_PID', 'WEXITED', 'WNOWAIT', 'WNOHANG')),
+            'experimental evaluation requires Linux waitid/WNOWAIT process supervision')
+    require(signal.getsignal(signal.SIGCHLD) == signal.SIG_DFL,
+            'evaluation requires default SIGCHLD handling and exclusive ownership of worker reaping')
+    require(signal.getsignal(signal.SIGTERM) is not None,
+            'evaluation requires a restorable Python SIGTERM handler')
+    try:
+        with os.scandir('/proc') as entries:
+            next(entries, None)
+        (Path('/proc') / str(os.getpid()) / 'stat').read_text()
+    except OSError as exc:
+        raise EvidenceError('evaluation requires a readable Linux /proc process inventory') from exc
+
+
+def _live_group_members(pgid):
+    """Detect a live helper while the unreaped leader still pins the group ID."""
+    with os.scandir('/proc') as entries:
+        for count, entry in enumerate(entries):
+            if count >= MAX_PROCESS_SCAN:
+                raise OSError('process inventory exceeds preview scan limit')
+            if not entry.name.isdigit() or int(entry.name) == pgid:
+                continue
+            try:
+                with (Path(entry.path) / 'stat').open() as handle:
+                    data = handle.read(8193)
+            except FileNotFoundError:
+                continue  # Other processes may exit during this snapshot.
+            parts = data.rsplit(')', 1)[-1].split()
+            if len(data) > 8192 or len(parts) < 3 or not parts[2].isdigit():
+                raise OSError('invalid Linux process inventory record')
+            if int(parts[2]) == pgid and parts[0] not in ('Z', 'X'):
+                return True
+    return False
 
 
 def runner_hashes():
@@ -43,7 +81,7 @@ def prepare_evaluation(config, *, base_dir):
            label='evaluation')
     require(type(config['evaluation_schema_version']) is int and config['evaluation_schema_version'] == 1,
             'unsupported evaluation schema version')
-    require(os.name == 'posix', 'experimental evaluation currently requires POSIX process isolation')
+    _require_supervision()
     text(config['title'], 'title')
     text(config['family'], 'family')
     require(isinstance(config['change'], dict), 'change must be an object')
@@ -140,6 +178,7 @@ def _worker_signals():
         yield
         return
     previous = signal.getsignal(signal.SIGTERM)
+    require(previous is not None, 'evaluation requires a restorable Python SIGTERM handler')
 
     def stop(signum, frame):
         raise KeyboardInterrupt('SIGTERM')
@@ -153,7 +192,7 @@ def _worker_signals():
 
 def _trial(plan_path, index, output, seconds, expected_reset=None, *, plan_sha256, max_steps):
     """Bound an owned worker group; preserve logs and partial actions on failure."""
-    require(not (output / 'worker.log').exists(), 'trial output already exists')
+    _require_supervision()
     output.mkdir(exist_ok=False)
     env = dict(os.environ, PYTHONDONTWRITEBYTECODE='1')
     env['PYTHONPATH'] = str(Path(__file__).resolve().parents[1])
@@ -163,13 +202,13 @@ def _trial(plan_path, index, output, seconds, expected_reset=None, *, plan_sha25
                  'trial_id': trial_id, 'expected_reset': expected_reset, 'status': 'admitted_not_proof_of_worker_start'}))
     started = time.monotonic()
     limited, cancelled, residual_group = False, False, False
-    proc, supervision_error = None, None
+    proc, supervision_error, faults = None, None, []
     with (output / 'worker.log').open('xb') as log, _worker_signals():
         try:
             proc = subprocess.Popen([sys.executable, '-m', 'policydiff._libero_worker', str(plan_path),
                                      str(index), str(output), json.dumps(expected_reset), plan_sha256, trial_id],
                                     cwd=output, env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
-            while proc.poll() is None:
+            while os.waitid(os.P_PID, proc.pid, os.WEXITED | os.WNOWAIT | os.WNOHANG) is None:
                 if time.monotonic() - started > seconds or os.fstat(log.fileno()).st_size > 1024 * 1024:
                     limited = True
                     break
@@ -178,16 +217,42 @@ def _trial(plan_path, index, output, seconds, expected_reset=None, *, plan_sha25
             cancelled = True
         except OSError as exc:
             supervision_error = f'{type(exc).__name__}: {exc}'[:1000]
+            faults.append('worker_supervision_failed')
         finally:
-            # The leader may have exited while a same-session helper remains.
-            # This group was created by this Popen; no other run is targeted.
+            # Do not poll/reap the leader before signalling. Its live/zombie PID
+            # pins the PGID; after reaping that number could belong to another run.
             if proc is not None:
                 try:
-                    os.killpg(proc.pid, signal.SIGKILL)
-                    residual_group = True
-                except ProcessLookupError:
-                    pass
-                proc.wait()
+                    exited = os.waitid(os.P_PID, proc.pid, os.WEXITED | os.WNOWAIT | os.WNOHANG)
+                except OSError as exc:
+                    faults.append('worker_ownership_lost')
+                    supervision_error = f'{type(exc).__name__}: {exc}'[:1000]
+                else:
+                    try:
+                        if exited is not None:
+                            try:
+                                residual_group = _live_group_members(proc.pid)
+                            except OSError as exc:
+                                faults.append('group_inventory_failed')
+                                supervision_error = f'{type(exc).__name__}: {exc}'[:1000]
+                        os.killpg(proc.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    except OSError as exc:
+                        faults.append('worker_group_cleanup_failed')
+                        supervision_error = f'{type(exc).__name__}: {exc}'[:1000]
+                        try:
+                            # The leader is still unreaped and owned here. This
+                            # fallback cannot establish that helpers were stopped.
+                            os.kill(proc.pid, signal.SIGKILL)
+                        except OSError as fallback:
+                            faults.append('worker_leader_cleanup_failed')
+                            supervision_error = f'{type(fallback).__name__}: {fallback}'[:1000]
+                finally:
+                    try:
+                        proc.wait(timeout=1)
+                    except subprocess.TimeoutExpired:
+                        faults.append('worker_reap_timeout')
         log_bytes = os.fstat(log.fileno()).st_size
     # A fast-exiting worker can cross a cap between polls. Caps are operational,
     # not a reason to erase its already recorded physical endpoint.
@@ -197,18 +262,22 @@ def _trial(plan_path, index, output, seconds, expected_reset=None, *, plan_sha25
         result = {'status': 'interrupted' if limited or cancelled else 'infrastructure_error', 'success': None,
                   'reason': ('supervisor_cancelled' if cancelled else
                              'worker_runtime_or_log_limit' if limited else 'worker_exit_without_result')}
-    if proc is not None and proc.returncode != 0:
-        result['cleanup_error'] = 'worker_nonzero_exit'
+    if proc is not None and proc.returncode not in (None, 0):
+        faults.append('worker_nonzero_exit')
     if residual_group:
-        result['cleanup_error'] = 'owned_worker_group_terminated'
+        faults.append('owned_worker_group_terminated')
     if cancelled:
-        result['cleanup_error'] = 'supervisor_cancelled_worker'
+        faults.append('supervisor_cancelled_worker')
     if limited:
-        result['cleanup_error'] = 'worker_runtime_or_log_limit'
-    if supervision_error:
-        result['cleanup_error'] = supervision_error
-    result['supervisor'] = {'worker_exit_code': proc.returncode if proc is not None else None,
-                            'log_bytes': log_bytes, 'limit_exceeded': limited, 'cancelled': cancelled}
+        faults.append('worker_runtime_or_log_limit')
+    if faults:
+        # Keep any specific receipt/worker diagnostic; supervisor faults have a
+        # separate bounded vocabulary and cannot overwrite those earlier facts.
+        result.setdefault('cleanup_error', '; '.join(faults))
+    result['supervisor'] = {'worker_pid': proc.pid if proc is not None else None,
+                            'worker_exit_code': proc.returncode if proc is not None else None,
+                            'log_bytes': log_bytes, 'limit_exceeded': limited, 'cancelled': cancelled,
+                            'faults': faults, 'error': supervision_error}
     return result
 
 
@@ -247,8 +316,12 @@ def run_evaluation(config_bytes, output, *, base_dir, allow_local_code=False):
         trial_dir = output / 'trials' / f'{index:04d}'
         key = cell['task'], cell['state']
         horizon = next(task['max_steps'] for task in plan['tasks'] if task['id'] == cell['task'])
-        result = _trial(output / 'plan.json', index, trial_dir, plan['timeout_seconds'], resets.get(key),
-                        plan_sha256=sha256(plan_data), max_steps=horizon)
+        try:
+            result = _trial(output / 'plan.json', index, trial_dir, plan['timeout_seconds'], resets.get(key),
+                            plan_sha256=sha256(plan_data), max_steps=horizon)
+        except (EvidenceError, OSError) as exc:
+            invalid_evidence = str(exc)
+            break
         atomic_write(trial_dir / 'supervisor_result.json', encode(result))
         if cell['arm'] == 'baseline' and result.get('physical_state_sha256') and result.get('rng_sha256'):
             resets[key] = {name: result[name] for name in ('physical_state_sha256', 'rng_sha256')}
@@ -273,7 +346,7 @@ def run_evaluation(config_bytes, output, *, base_dir, allow_local_code=False):
         if result['status'] in ('infrastructure_error', 'interrupted') or result.get('cleanup_error'):
             stop_reason = result['reason'] if not result.get('cleanup_error') else 'trial_cleanup_or_supervision_fault'
             break
-    if invalid_evidence:
+    if invalid_evidence is not None:
         result = {'status': 'evaluation_aborted', 'complete': False, 'output': str(output),
                   'planned_trials': len(plan['cells']), 'recorded_trials': len(rows),
                   'comparison': None, 'error': invalid_evidence, 'plan_sha256': sha256(plan_data),

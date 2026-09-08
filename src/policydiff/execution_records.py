@@ -105,8 +105,14 @@ def collect_receipts(output, plan_sha256, index, max_steps, trial_id):
             return {'status': 'infrastructure_error', 'success': None, 'reason': 'invalid_worker_receipt',
                     'error': '; '.join(errors)}
         return None
+    cleanup_errors = {name: record['cleanup_error'] for name, record in records.items()
+                      if 'cleanup_error' in record}
+    if cleanup_errors:
+        result['receipt_cleanup_errors'] = cleanup_errors
+        result.setdefault('cleanup_error', next(iter(cleanup_errors.values())))
     if errors or len(records) != 2:
-        result['cleanup_error'] = '; '.join(errors) if errors else 'worker_receipt_incomplete'
+        result['receipt_errors'] = errors or ['worker_receipt_incomplete']
+        result.setdefault('cleanup_error', '; '.join(result['receipt_errors']))
     if result['input_integrity'] == 'pending':
         result['integrity_error'] = 'input verification did not finish; measured endpoint retained but comparison blocked'
     return result

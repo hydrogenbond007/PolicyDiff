@@ -331,3 +331,52 @@ conflicting receipts, wrong plan/trial/admission identities, late input changes,
 interrupted seals, spawn faults and injected atomic-publication failures. Review
 receipts and local simulator controls remain outside this repository. The analysis
 engine, evidence schema, statistics and bundle verifier are unchanged.
+
+## dev8 native source review and pre-push fixes
+
+The user explicitly requested the push and continued Claude collaboration. Scoped
+native source-review calls were approved for this package's code, tests and docs;
+no benchmark data, weights or credentials were sent. Actual Claude Opus 5 reviewed
+the executor and, independently, CLI/inspection integration. Source hashes and raw
+responses remain outside the package. Reviewers inspected supplied source only;
+operator and local-agent test executions are separate evidence.
+
+Reproduced and fixed: reaping the worker leader before group cleanup released its
+identity, supervisor faults overwrote specific receipt diagnostics, empty exception
+messages bypassed an evidence-abort branch, and external-log inspection incorrectly
+assumed errored trials must have empty score records. The ownership test checks
+that the child is still waitable at signalling; no unrelated process was killed
+to demonstrate actual PID reuse. Added pre-first/final-cell abort checks and
+real-subprocess lifecycle regressions.
+
+The optional executor now explicitly requires Linux waitid/WNOWAIT and readable
+/proc, with default SIGCHLD handling and exclusive child-reaping ownership. A
+bounded process inventory preserves helper-fault detection; signalling precedes
+reaping. Group-signal failure can fall back to the still-owned leader, with bounded
+reaping and explicit unresolved faults. This does not promise termination of
+helpers that escape the group or when the OS refuses signals. Analysis/catalogue
+remain independent of that platform capability.
+
+Kept specific worker/receipt diagnostics and a separate bounded supervisor fault
+vocabulary. Clarified EGL/dependency installation, integrity-abort output, catalogue
+envelopes and terminal-log accounting notes. Did not add inherited-path variability,
+generic parser factories, a process-manager framework or exception masking without
+a reproduced caller-triggered case. The core comparison schemas/statistics are
+unchanged; no learned-policy, hardware, full-catalogue or commercial-moat claim.
+
+The fresh native closure found a second diagnostic-loss path in receipt collection.
+Reproduced missing/corrupt-final cases against the old implementation, then kept
+full worker diagnostics and separate transport errors, including the maximum-length
+case. Also reject a non-restorable SIGTERM handler before admission. Declined to
+exclude cleanup time from the documented operational cap or suppress process-scan
+faults. The worker rewrites the terminal seal before its final record; separate
+real simulator controls confirmed matching verified receipts. No conflict rule was
+relaxed on the basis of a review payload that omitted the worker source.
+
+A focused fourth native pass identified complete-transport diagnostic loss and
+per-trial preflight errors escaping abort publication. Retain each receipt's
+diagnostic, carry terminal-only faults forward, recheck handler restorability at
+installation and publish a preserved partial abort for trial-setup errors. Added
+direct regressions for each. These final small fixes are locally verified changes,
+not a further native sign-off. Reviews are bounded source challenges, not approval
+votes or proof that every defect has been removed.

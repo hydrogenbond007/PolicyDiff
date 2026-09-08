@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.0.dev8 — unreleased
+
+- Native Claude Opus 5 source review of the pending executor and CLI/inspection
+  integrations; scoped fixes and local verification are recorded in RELEASE_REVIEW.
+- Preserve worker process-group ownership through cleanup; optional execution now
+  requires Linux with waitid/WNOWAIT and readable /proc. Analysis stays portable.
+- Retain receipt diagnostics alongside supervisor faults; evidence-integrity aborts
+  remain aborts even when an exception has an empty message.
+- External-log error counters no longer imply empty score records. Terminal logs
+  receive an appropriate accounting note; documented CLI/API boundaries clarified.
+- No change to comparison schemas, statistics, model compatibility or robot claims.
+
 ## 0.1.0.dev7 — unreleased
 
 - Versioned, bounded worker receipts bind plan bytes, cell and unique admission.

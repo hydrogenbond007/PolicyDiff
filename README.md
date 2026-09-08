@@ -253,13 +253,15 @@ Exit codes:
 | Code | Meaning |
 | --- | --- |
 | 0 | Command succeeded; **not** a policy pass |
-| 2 | Invalid input or output error |
+| 2 | Invalid input/output, or `evaluate` aborted on evidence-integrity failure |
 | 3 | Required coverage is incomplete under `--strict-coverage`, or `evaluate` is incomplete/unclean |
 | 4 | Internal software error; not an input rejection or policy failure |
 
-Command-line usage errors (missing flags, malformed values or invalid choices)
+Parser-detected usage errors (missing flags, malformed values or invalid choices)
 also exit 2, but print usage text rather than JSON. Do not assume every exit-2
 response is machine-readable diagnostics.
+An integrity-aborted `evaluate` prints `status: evaluation_aborted` and its error
+on standard output, saves `evaluation.json`, and creates no comparison bundle.
 
 An incomplete report is useful evidence and is still written with strict coverage.
 An output error can also occur **after** a bundle finished, for example when a
@@ -281,7 +283,8 @@ mean preservation. Check eligibility, coverage and observed losses separately.
 
 ## Not built yet
 
-No simulator runners, real-hardware pairing, model-specific adapters, dataset
+No simulator integrations beyond the experimental LIBERO runner, real-hardware
+pairing, model-specific adapters, dataset
 exposure verifier, failure-video UI, causal failure classifier, hosted service or
 cross-embodiment transfer claim. The initial CSV schema supports exact paired
 synthetic/simulation evidence only. Context changes are not weight fine-tuning.

@@ -2,18 +2,21 @@
 import json
 import os
 from pathlib import Path
+import signal
 import subprocess
 import sys
 import tempfile
 import time
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
+from policydiff import execution
 from policydiff.execution import _trial
 from policydiff.execution_records import receipt
 
 
-@unittest.skipUnless(os.name == 'posix', 'executor requires POSIX process groups')
+@unittest.skipUnless(sys.platform.startswith('linux') and hasattr(os, 'WNOWAIT'),
+                     'executor requires Linux non-reaping process supervision')
 class SupervisorTests(unittest.TestCase):
     def setUp(self):
         temp = tempfile.TemporaryDirectory()
@@ -28,7 +31,11 @@ class SupervisorTests(unittest.TestCase):
             prefix = 'TRIAL_ID = ' + repr(args[-1]) + '\n'
             process = real_popen([sys.executable, '-c', prefix + code], **kwargs)
             if wait_before_poll:
-                process.wait(timeout=2)
+                deadline = time.monotonic() + 2
+                while os.waitid(os.P_PID, process.pid, os.WEXITED | os.WNOWAIT | os.WNOHANG) is None:
+                    if time.monotonic() > deadline:
+                        raise RuntimeError('test worker did not finish')
+                    time.sleep(0.01)
             return process
 
         with patch('policydiff.execution.subprocess.Popen', side_effect=substitute):
@@ -50,6 +57,64 @@ class SupervisorTests(unittest.TestCase):
         self.assertEqual((result['status'], result['success']), ('completed', True))
         self.assertNotIn('cleanup_error', result)
 
+    def test_group_kill_precedes_reaping_the_owned_leader(self):
+        real_killpg = os.killpg
+        checked = []
+
+        def check_ownership(pid, sig):
+            event = os.waitid(os.P_PID, pid, os.WEXITED | os.WNOWAIT | os.WNOHANG)
+            self.assertIsNotNone(event, 'cleanly exited leader must remain waitable until group cleanup')
+            self.assertEqual(event.si_pid, pid)
+            checked.append(pid)
+            real_killpg(pid, sig)
+
+        with patch('policydiff.execution.os.killpg', side_effect=check_ownership):
+            result = self.launch(self.record('terminal.json') + self.record('result.json'))
+        self.assertEqual(len(checked), 1)
+        self.assertNotIn('cleanup_error', result)
+
+    def test_failed_group_inventory_still_kills_owned_group_and_flags_unclean(self):
+        real_killpg = os.killpg
+        with patch('policydiff.execution._live_group_members', side_effect=OSError('synthetic proc failure')), \
+                patch('policydiff.execution.os.killpg', wraps=real_killpg) as kill:
+            result = self.launch(self.record('terminal.json') + self.record('result.json'))
+        kill.assert_called_once()
+        self.assertTrue(result['success'])
+        self.assertIn('group_inventory_failed', result['supervisor']['faults'])
+        self.assertIn('cleanup_error', result)
+
+    def test_process_inventory_limit_fails_closed(self):
+        with patch.object(execution, 'MAX_PROCESS_SCAN', 0), \
+                self.assertRaisesRegex(OSError, 'scan limit'):
+            execution._live_group_members(os.getpid())
+
+    def test_group_signal_failure_uses_owned_leader_fallback_and_stays_unclean(self):
+        code = self.record('terminal.json') + 'import time; time.sleep(30)'
+        real_kill = os.kill
+        with patch.object(execution.os, 'killpg', side_effect=PermissionError('synthetic group signal failure')), \
+                patch.object(execution.os, 'kill', wraps=real_kill) as kill:
+            result = self.launch(code, seconds=0.2)
+        kill.assert_called_once()
+        self.assertTrue(result['success'])
+        self.assertIn('worker_group_cleanup_failed', result['supervisor']['faults'])
+        self.assertEqual(result['supervisor']['worker_exit_code'], -signal.SIGKILL)
+
+    def test_failed_signals_cannot_create_an_unbounded_wait(self):
+        process = MagicMock(pid=2147483647, returncode=None)
+        process.wait.side_effect = subprocess.TimeoutExpired('synthetic worker', 1)
+        with patch.object(execution.subprocess, 'Popen', return_value=process), \
+                patch.object(execution.os, 'waitid', return_value=object()), \
+                patch.object(execution, '_live_group_members', return_value=False), \
+                patch.object(execution.os, 'killpg', side_effect=PermissionError('synthetic group failure')), \
+                patch.object(execution.os, 'kill', side_effect=PermissionError('synthetic leader failure')):
+            result = _trial(self.root / 'unused', 0, self.root / 'trial', 1,
+                            plan_sha256='a' * 64, max_steps=20)
+        process.wait.assert_called_once_with(timeout=1)
+        self.assertIn('worker_reap_timeout', result['supervisor']['faults'])
+        self.assertIn('worker_leader_cleanup_failed', result['supervisor']['faults'])
+        self.assertEqual(result['supervisor']['worker_pid'], process.pid)
+        self.assertIsNone(result['supervisor']['worker_exit_code'])
+
     def test_unexplained_exit_is_not_scored_as_failure(self):
         result = self.launch('raise SystemExit(7)')
         self.assertEqual((result['status'], result['success']), ('infrastructure_error', None))
@@ -66,7 +131,15 @@ class SupervisorTests(unittest.TestCase):
         self.assertIn('cleanup_error', result)
 
     def test_supervisor_cancellation_returns_an_accountable_interruption(self):
-        with patch('policydiff.execution.time.sleep', side_effect=KeyboardInterrupt):
+        real_sleep, pending = time.sleep, [True]
+
+        def cancel_once(seconds):
+            if pending:
+                pending.pop()
+                raise KeyboardInterrupt
+            real_sleep(seconds)
+
+        with patch('policydiff.execution.time.sleep', side_effect=cancel_once):
             result = self.launch('import time; time.sleep(30)')
         self.assertEqual((result['status'], result['success']), ('interrupted', None))
         self.assertEqual(result['reason'], 'supervisor_cancelled')
@@ -85,6 +158,28 @@ class SupervisorTests(unittest.TestCase):
         result = self.launch(self.record('terminal.json') + 'Path("result.json").write_text("{")')
         self.assertTrue(result['success'])
         self.assertIn('cleanup_error', result)
+
+    def test_receipt_diagnostic_survives_nonzero_exit(self):
+        code = self.record('terminal.json') + 'Path("result.json").write_text("{"); raise SystemExit(7)'
+        result = self.launch(code)
+        self.assertTrue(result['success'])
+        self.assertIn('result.json', result['cleanup_error'])
+        self.assertIn('worker_nonzero_exit', result['supervisor']['faults'])
+
+    def test_reaped_leader_is_not_signalled_as_an_owned_group(self):
+        real_popen = subprocess.Popen
+
+        def substitute(args, **kwargs):
+            process = real_popen([sys.executable, '-c', 'pass'], **kwargs)
+            process.wait(timeout=2)
+            return process
+
+        with patch('policydiff.execution.subprocess.Popen', side_effect=substitute), \
+                patch('policydiff.execution.os.killpg') as kill:
+            result = _trial(self.root / 'unused', 0, self.root / 'trial', 1,
+                            plan_sha256='a' * 64, max_steps=20)
+        kill.assert_not_called()
+        self.assertIn('worker_ownership_lost', result['supervisor']['faults'])
 
     def test_conflicting_outcomes_never_choose_the_favorable_receipt(self):
         result = self.launch(self.record('terminal.json') + self.record('result.json', success=False, steps=20))
@@ -120,3 +215,21 @@ class SupervisorTests(unittest.TestCase):
         self.assertEqual((result['status'], result['success']), ('infrastructure_error', None))
         self.assertIsNone(result['supervisor']['worker_exit_code'])
         self.assertTrue((self.root / 'trial/admission.json').is_file())
+
+    def test_signal_guard_rechecks_handler_before_installing_or_spawning(self):
+        calls = []
+
+        def handler(signum):
+            if signum == signal.SIGTERM:
+                calls.append(signum)
+                return signal.SIG_DFL if len(calls) == 1 else None
+            return signal.SIG_DFL
+
+        with patch.object(execution.signal, 'getsignal', side_effect=handler), \
+                patch.object(execution.signal, 'signal') as install, \
+                patch.object(execution.subprocess, 'Popen') as spawn:
+            with self.assertRaisesRegex(execution.EvidenceError, 'restorable'):
+                _trial(self.root / 'unused', 0, self.root / 'trial', 1,
+                       plan_sha256='a' * 64, max_steps=20)
+        install.assert_not_called()
+        spawn.assert_not_called()
