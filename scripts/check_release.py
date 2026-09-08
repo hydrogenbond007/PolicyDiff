@@ -17,7 +17,7 @@ import zipfile
 PACKAGE = Path(__file__).resolve().parents[1]
 REQUIRED_TOP = ('pyproject.toml', 'MANIFEST.in', 'README.md', 'SCHEMA.md', 'ARCHITECTURE.md',
                 'CONTRIBUTING.md', 'SECURITY.md', 'CHANGELOG.md', 'REVIEW_NOTES.md',
-                'RELEASE_REVIEW.md', '.gitignore', '.gitattributes')
+                'RELEASE_REVIEW.md', 'THIRD_PARTY_NOTICES.md', 'EXECUTION.md', '.gitignore', '.gitattributes')
 SOURCE_TREES = {'src/policydiff': '.py', 'tests': '.py', 'scripts': '.py', '.github/workflows': '.yml'}
 # These generated/local-only root directories are excluded, not verified. Do not
 # extend this into a general ignore-glob parser that could hide source assets.
@@ -278,6 +278,20 @@ raise SystemExit(0 if result.wasSuccessful() else 1)
             raise RuntimeError('installed external-log inventory disagrees or loses accounting/source hash')
         log_path.write_text('{"version":2}', encoding='utf-8')
         run('installed-log-invalid-version', cli + inspect_args, expected=2)
+        catalogue = json.loads(run('installed-catalogue', cli + ['catalog', '--suite', 'libero_object']).stdout)
+        console_catalogue = json.loads(run('installed-console-catalogue', [console, 'catalog', '--suite', 'libero_object']).stdout)
+        if (catalogue != console_catalogue or catalogue['catalogue_task_count'] != 130
+                or catalogue['selected_task_count'] != 10
+                or any(task['availability'] != 'listed' for task in catalogue['tasks'])):
+            raise RuntimeError('installed catalogue disagrees or fabricates readiness')
+        run('installed-catalogue-invalid-suite', cli + ['catalog', '--suite', 'nope'], expected=2)
+        evaluation_path = out / 'not-an-evaluation.json'
+        evaluation_path.write_text('{}', encoding='utf-8')
+        evaluation_args = ['evaluate', '--config', str(evaluation_path), '--output', str(out / 'never-executed')]
+        run('installed-evaluate-needs-trust', cli + evaluation_args, expected=2)
+        run('installed-evaluate-invalid-config', cli + evaluation_args + ['--allow-local-code'], expected=2)
+        if (out / 'never-executed').exists():
+            raise RuntimeError('invalid evaluation created an execution directory')
         run('strict-missingness', cli + ['validate'] + inputs + ['--strict-coverage'], expected=3)
         run('refuse-overwrite', cli + ['demo', '--output', str(out / 'demo')], expected=2)
         for path in (out / 'demo').iterdir():

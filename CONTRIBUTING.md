@@ -1,6 +1,6 @@
 # Development and contributions
 
-This is a pre-alpha analysis library. No open-source license or external
+This is a pre-alpha analysis library with optional local simulation. No PolicyDiff license or external
 contribution terms have been chosen yet; resolve those before soliciting patches
 from other people. The instructions below describe local development.
 
@@ -47,10 +47,12 @@ local tests or a review summary do not establish that hosted CI passed.
 
 - Add a failing adversarial test before fixing evidence-accounting bugs.
 - Keep parsing/snapshotting, contract validation, comparison, statistics and
-  rendering separate. The public interface is `policydiff.compare` plus
-  `EvidenceError`; other modules are implementation details during this preview.
+  rendering separate. Supported Python exports are documented in ARCHITECTURE.md;
+  the opt-in executor is a separate CLI workflow, not part of the comparison engine.
 - Keep runtime dependencies empty unless a concrete adapter requirement justifies
   a separately scoped optional dependency.
+- Keep simulator controls outside the standard-library test gate. A listed task,
+  mocked environment or successful action replay is not trained-policy validation.
 - Preserve missingness and retest churn. Do not convert a lack of evidence into a
   pass, repair scored policy responses, or hide unfavorable cases.
 - Use synthetic fixtures only in this repository. No credentials, checkpoints,

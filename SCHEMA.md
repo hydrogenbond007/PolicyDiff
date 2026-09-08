@@ -1,5 +1,9 @@
 # Schema v1 guide
 
+This guide describes comparison inputs/reports. The separate opt-in evaluation
+configuration and catalogue schema are documented in [EXECUTION.md](EXECUTION.md);
+the executor generates these existing v1 inputs without relaxing their checks.
+
 All fields are required unless marked optional; unknown fields are rejected.
 The generated demo is the executable example.
 

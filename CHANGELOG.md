@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.0.dev6 — unreleased
+
+- Offline `catalog` and `list_tasks` expose 130 pinned LIBERO task names, suite/query
+  selection, source-order IDs and explicit unverified readiness/exposure labels.
+- Opt-in `evaluate` integrates selected tasks/starts with a trusted local Python
+  adapter in an existing LIBERO environment. Explicit Panda RGB/proprioception/
+  OSC7 ABI; no arbitrary checkpoint, remote server or hardware support.
+- Frozen task/source/asset/runner/checkpoint identities, per-case seeds, fresh
+  worker groups, measured reset checks before candidate/retest actions, partial
+  accounting and automatic comparison bundles. No retries, clipping or inference.
+- Cancellation and cleanup cannot fabricate a horizon failure or erase a saved
+  terminal outcome. Infrastructure faults stop further admissions.
+- Analysis schemas, pairing/statistics and bundle formats remain unchanged.
+  Standard-library analysis/catalogue remains independent of optional simulation.
+
 ## 0.1.0.dev5 — unreleased
 
 - Read-only `inspect-log --format inspect-robots` and `inspect_log` API inventory
@@ -81,5 +96,5 @@ Initial import-oriented developer preview:
 - JSON/Markdown bundles, explicit CLI exit semantics and synthetic walkthrough.
 - Adversarial tests, portable packaging checks and a prepared GitHub CI workflow.
 
-Not a robot runner, hardware adapter, deployment gate, causal diagnosis tool,
+At dev0: not a robot runner, hardware adapter, deployment gate, causal diagnosis tool,
 generalization certificate or stable public API. No public release has been made.

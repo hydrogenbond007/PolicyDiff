@@ -1,5 +1,6 @@
 include README.md SCHEMA.md ARCHITECTURE.md CONTRIBUTING.md SECURITY.md CHANGELOG.md REVIEW_NOTES.md RELEASE_REVIEW.md
 include .gitattributes .gitignore
+include THIRD_PARTY_NOTICES.md EXECUTION.md
 recursive-include tests *.py
 recursive-include scripts *.py
 recursive-include .github *.yml

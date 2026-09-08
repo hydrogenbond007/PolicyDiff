@@ -5,6 +5,9 @@ source-inspection passes covered architecture, adversarial code behavior and
 patch closure before release preparation. Their resolved model was Claude Opus 5. Reviewers did
 not execute tests; all executions below are local operator checks.
 
+This opening record is historical. Later version-specific reviews below describe
+additional scope; in particular, dev6 introduces optional local simulation.
+
 ## Architecture decisions
 
 - Accepted separate input/report schema versions, consistent library/CLI report
@@ -270,3 +273,36 @@ These checks run no robot, policy, scorer or model. No recovery from logless tri
 physical pairing, full upstream-schema conformance or independent usability is
 claimed. Source/installed tests and module/console commands are covered by the
 offline release script; actual hosted CI remains separate.
+
+## dev6 task catalogue and integrated execution
+
+User direction expanded the product from importing outcomes to choosing tasks
+and running compatible policies locally. Actual native Claude Opus5 and native
+Kimi (requested managed k3 alias) completed public-only architecture challenges.
+Neither received private implementation, benchmark data or weights. Those are
+architecture reviews, not implementation approval. Private provider payload
+clearance remains pending; local Codex adversarial review inspected the code.
+
+Accepted a thin integration around existing LIBERO environment primitives,
+source-pinned task identities, separate listed-versus-tested status, an explicit
+observation/action ABI and caller-declared exposure. Model loading/normalization
+stay in a trusted explicit adapter; arbitrary VLA compatibility is not inferred.
+Rejected implicit action clipping and hiding changed outcomes inside a supposed
+noise floor. Unchanged-policy retest churn remains evidence, not a correction.
+
+Local adversarial review identified terminal-outcome loss during cleanup, surviving
+same-group helpers, pairing checks deferred until after later trials, ragged-action
+misclassification, missing dependency errors, and cancellation mislabeled as a
+completed horizon failure. Fixes add pre-cleanup terminal records, owned-group
+cleanup, pre-adapter measured-reset checks and incremental row validation,
+explicit invalid-action handling and cancellation accounting. Runner source bytes
+are included in the frozen identity, in addition to selected inputs/assets.
+
+Standard-library tests cover mocked execution accounting and worker control flow,
+real subprocess timeout/cancellation/helper cleanup, and catalogue purity. Separate
+local simulator controls exercise saved action replay and deliberate no-ops; these
+are integration checks, not learned-policy validation, transfer or competence
+evidence. Raw controls and native review payloads remain outside the package.
+The offline release script checks catalogue console/module parity and refusal of
+untrusted/invalid evaluation configs without installing simulator dependencies.
+Software/source receipts, not this narrative, identify each verified build.

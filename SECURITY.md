@@ -23,6 +23,18 @@ not authenticity, execution truth or correctness of the analysis. A coordinated
 rewrite of payloads and the unsigned receipt can pass. It does not open referenced
 traces/videos or certify extra files placed beside the four checked payloads.
 
+## Optional trusted-code execution
+
+The optional `evaluate --allow-local-code` command has a different trust boundary:
+it executes the explicitly selected Python adapter and trusted checkpoint/initial-
+state assets, including potentially pickle-based files. Dependencies must already
+exist in the selected environment. Process groups and runtime/log caps manage
+lifecycle, not hostile code. Adapters can access files/network or escape a process
+group; do not accept adapters, checkpoints or LIBERO assets from untrusted users.
+Input hashes detect ordinary changes but do not sandbox code, authenticate model
+weights or exhaustively identify dependency/import state. Execution evidence may
+contain paths, observations and user/model output. Nothing is automatically uploaded.
+
 ## Reporting issues
 
 No private reporting channel has been configured yet. Before public release,

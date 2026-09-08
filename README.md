@@ -2,18 +2,20 @@
 
 **What did this robot-policy update improve, what did it break, and what have we not tested?**
 
-PolicyDiff is a local-first developer preview for comparing saved episode outcomes
-before and after a policy update. It produces a condition-by-condition behavioral
-diff, not a public leaderboard or a deployment certificate.
+PolicyDiff is a local-first developer preview for testing and comparing robot-policy
+updates. It produces a condition-by-condition behavioral diff, not a public
+leaderboard or a deployment certificate.
 
 The initial workflow is deliberately narrow: one baseline, its candidate revision,
 and an optional unchanged-baseline retest. Import a manifest and episode CSV;
 receive a portable JSON report, a readable Markdown report, and exact input
-snapshots with hashes. Nothing calls a model, runs a robot, or contacts a server.
+snapshots with hashes. These comparison commands never execute a policy. An opt-in
+LIBERO task catalogue and local runner now provide an integrated simulation path
+for an explicitly compatible Python policy adapter; see [execution guide](EXECUTION.md).
 
 ## Try it
 
-Python 3.10+; runtime uses only the standard library. From this directory:
+Python 3.10+; analysis and catalogue use only the standard library. From this directory:
 
 ```sh
 PYTHONPATH=src python3 -m policydiff demo --output demo-output
@@ -48,7 +50,8 @@ PYTHONPATH=src python3 -m unittest discover -s tests -v
 
 Or install with `pip install .` and use the `policydiff` command. Installing from
 source requires setuptools 68+ and wheel in the build environment; runtime has
-no third-party dependencies. The command refuses an existing output directory.
+no mandatory third-party dependencies. The optional executor requires a separately
+prepared LIBERO environment. Commands refuse an existing output directory.
 Without `--output`, `compare` writes JSON to standard output.
 
 `verify` is read-only: it checks the four saved payloads against the completion
@@ -71,6 +74,10 @@ Each invocation repeats that full analysis, even when only a display filter chan
 
 ## What the first version does
 
+- Lists 130 source-pinned LIBERO tasks by suite or search text, without importing a simulator.
+- Optionally runs selected tasks/starts against baseline, candidate and retest,
+  then produces the same comparison bundle. Requires a compatible trusted adapter;
+  catalogue listing alone never means a task or checkpoint has been validated.
 - Separates old/rehearsed, old/unrehearsed, adaptation-target and held-out slices.
 - Shows exact matched cases lost and gained, including when averages are unchanged.
 - Keeps each declared camera, layout, object or other condition visible, even if
@@ -78,11 +85,32 @@ Each invocation repeats that full analysis, even when only a display filter chan
 - Distinguishes scored policy failures from infrastructure faults, interruptions
   and missing records. Reports planned counts and asymmetric outcome coverage.
 - Checks that caller-declared checkpoint, protocol, physical-start and RNG
-  identities agree with the comparison contract; it does not inspect those assets.
+  identities agree with the comparison contract. Imported CSV identities remain
+  caller assertions; the opt-in runner separately captures its documented input/reset hashes.
 - Shows unchanged-policy retest churn separately. It does not censor that churn
   or subtract it as a supposed causal correction.
 - Snapshots exactly the bytes parsed, rejects ambiguous inputs, escapes report
   text and records bundle hashes. Caller-provided identity is still an attestation.
+
+## Choose tasks and run a policy update
+
+```sh
+policydiff catalog --suite libero_object
+policydiff catalog --query drawer
+policydiff evaluate --config evaluation.json --output new-evaluation --allow-local-code
+```
+
+The [execution guide](EXECUTION.md) defines the configuration and adapter contract.
+Select explicit task IDs, initial-state indices, budgets and known training-exposure
+labels. The runner freezes these inputs, measures starts before policy execution,
+runs fresh worker processes and records losses, gains, retest churn and missingness.
+
+This first integration supports **LIBERO + Panda + one explicit RGB/proprioception
+and seven-action interface**, not any checkpoint on any robot. You supply model
+loading and its training-matched preprocessing. No automatic downloads, model
+servers, real hardware or multi-benchmark catalogue yet. The command executes
+trusted local code and is not a security sandbox. Its reports are descriptive,
+not an automated release gate. Listed tasks are not a competence claim.
 
 ## Did the test setup change too?
 
@@ -149,7 +177,8 @@ for condition in report["slices"]:
 The library validates data but does not read files or compute source-byte hashes;
 the file-oriented CLI adds input hashes and snapshots. Evidence references are
 unverified relative-path text, not clickable/executed assets. Video, trace and
-checkpoint verification need an adapter; they are not implemented here.
+checkpoint verification are outside the comparison API. The opt-in executor
+captures selected file/reset identities but does not authenticate arbitrary evidence.
 
 ## Is this a fit for your workflow?
 
@@ -192,7 +221,8 @@ The broader category is not unoccupied: [RoboLens](https://www.robolens.to/)
 advertises policy-regression and release workflows, while
 [Inspect Robots](https://github.com/robocurve/inspect-robots) provides an evaluation
 runner/logging framework. Those descriptions are not independently tested
-integrations. PolicyDiff is a small analysis layer; superiority over those tools
+integrations. PolicyDiff is a small analysis layer with an experimental local runner;
+superiority over those tools
 or an existing team notebook has not been demonstrated.
 
 ## Statistical scope
@@ -224,7 +254,7 @@ Exit codes:
 | --- | --- |
 | 0 | Command succeeded; **not** a policy pass |
 | 2 | Invalid input or output error |
-| 3 | `--strict-coverage` was requested and required coverage is incomplete |
+| 3 | Required coverage is incomplete under `--strict-coverage`, or `evaluate` stopped incomplete |
 | 4 | Internal software error; not an input rejection or policy failure |
 
 Command-line usage errors (missing flags, malformed values or invalid choices)

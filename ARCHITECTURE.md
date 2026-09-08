@@ -1,9 +1,12 @@
 # PolicyDiff developer preview — implementation contract
 
-Local-first, standard-library Python package. No hosted services, robot execution,
-model calls or external data access in the package. Input: a JSON comparison
-manifest and CSV episode records. Output: JSON and Markdown behavioral-diff report.
-Examples are explicitly synthetic, not robotics results. No license selected yet.
+Local-first Python package with a standard-library analysis/catalogue core and a
+separate opt-in LIBERO executor. Core input: JSON comparison manifest and CSV
+episode records. Output: JSON and Markdown behavioral-diff report. The optional
+executor invokes a trusted local adapter in a separately prepared environment;
+it does not provide a model server or hardware stack. Repository examples are
+synthetic, not robotics results. No PolicyDiff license selected yet; bundled
+LIBERO task-name data retains its upstream MIT notice.
 
 Manifest schema v1 has exactly one baseline, one candidate and optional unchanged
 retest revision. Each carries id, checkpoint identity and model family; the
@@ -48,9 +51,10 @@ validation cannot prove training history. No generalization certificate, deploym
 pass or automatic release gate. Untested slices stay visible. Partial paired
 counts are observed subsets, not unconditional population estimates.
 
-Commands implemented: validate, compare, cases, demo, verify, inspect-contract and inspect-log. Public Python compare(manifest, rows)
+Commands implemented: validate, compare, cases, demo, verify, inspect-contract,
+inspect-log, catalog and evaluate. Public Python compare(manifest, rows)
 API shares the same validation. Package must install and run offline in an isolated
-venv. Start with an import-oriented preview, not fake support for arbitrary VLAs.
+venv for analysis/catalogue. Execution dependencies are optional and not downloaded.
 
 Top-level summaries expose lost/gained/unresolved slice-cases and eligibility.
 No eligible tests means a null inferential-regression flag, not false. Retest
@@ -69,15 +73,20 @@ completion receipts identify evidence origin and coverage; completion is not a p
 | `triage` | Select displayed cases from a full validated comparison, retaining all slice summaries | Recompute inference or coverage on outcome-selected cases |
 | `contract` | Describe flat caller-recorded protocol fields across two snapshots | Certify matching protocols, interpret outcomes or weaken the comparison gate |
 | `log_inspection` | Inventory selected external-runner counters, score and annotation coverage | Import outcomes, infer pairing, read metadata contents or declare readiness |
+| `catalogue` / `_libero_tasks` | Filter pinned public task-name metadata with stable source-order IDs | Claim task readiness, training exclusion or model compatibility |
+| `execution` | Freeze a bounded selection, supervise owned workers, persist partial evidence and call the existing comparison API | Invent outcomes, retry failures or bypass schema gates |
+| `_libero_worker` | Restore and fingerprint selected starts, enforce an explicit observation/action ABI, capture official success | Normalize/clip for an arbitrary model or certify exhaustive state identity |
 | `bundle` | Exclusive snapshots, atomic completion and read-only checksum/metadata checks | Authenticate the author, rerun policy outcomes or follow evidence references |
 | `cli` | Compose file input, comparison and exclusive bundle output | Publish, upload or issue a deployment pass |
 
-The supported Python API is `compare`, `describe_contract_change`, `inspect_log` and `EvidenceError`. Other modules are
+The supported Python API is `compare`, `describe_contract_change`, `inspect_log`,
+`list_tasks` and `EvidenceError`. Other modules are
 internal during the preview. Adapters should construct the explicit manifest/row
 contract or use CLI input files, not couple policy execution into the engine.
-No plugin loader is justified yet. A future runner needs its own measured-state,
-budget, retest, intervention and evidence-capture contract; adding an enum alone
-does not establish hardware support or valid repeated-trial inference.
+There is no plugin marketplace or automatic loader discovery. The opt-in CLI
+loads exactly the caller-selected trusted Python adapter. Its narrow measured-state,
+budget, retest and evidence-capture contract is in [EXECUTION.md](EXECUTION.md).
+Adding catalogue names never establishes hardware support or valid inference.
 
 `inspect_log(log, source_format="inspect-robots")` is isolated from the comparison
 engine. It inventories selected v1 fields, preserving recorded denominators and

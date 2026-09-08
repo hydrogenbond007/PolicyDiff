@@ -1,4 +1,4 @@
-"""Offline commands. Exit zero means the command succeeded, never a policy pass."""
+"""Local analysis and opt-in evaluation. Exit zero never means a policy pass."""
 import argparse
 import json
 import os
@@ -7,6 +7,7 @@ import sys
 
 from . import __version__
 from .bundle import verify_bundle, write_bundle
+from .catalogue import list_tasks
 from .contract import MAX_SNAPSHOT_BYTES, describe_contract_change
 from .demo import fixture
 from .engine import compare
@@ -81,10 +82,32 @@ def main(argv=None):
     log = sub.add_parser('inspect-log', help='inventory recorded scores and missing annotations; not a comparison or import')
     log.add_argument('--format', required=True, choices=('inspect-robots',), dest='source_format')
     log.add_argument('--input', required=True, type=Path)
+    catalogue = sub.add_parser('catalog', help='list source-pinned LIBERO tasks; not a readiness check')
+    catalogue.add_argument('--suite')
+    catalogue.add_argument('--query')
+    evaluation = sub.add_parser('evaluate', help='opt-in local LIBERO execution with a trusted Python policy adapter')
+    evaluation.add_argument('--config', required=True, type=Path)
+    evaluation.add_argument('--output', required=True, type=Path)
+    evaluation.add_argument('--allow-local-code', action='store_true',
+                            help='acknowledge that the adapter and checkpoint/initial-state assets are trusted executable inputs')
     args = parser.parse_args(argv)
     completed_result = {}
     record_lines = []
     try:
+        if args.command == 'catalog':
+            result = list_tasks(suite=args.suite, query=args.query)
+            completed_result = {'command': args.command, 'result_status': result['status']}
+            sys.stdout.write(encode(result).decode())
+            sys.stdout.flush()
+            return 0
+        if args.command == 'evaluate':
+            from .execution import run_evaluation
+            result = run_evaluation(read_snapshot(args.config, maximum=65536), args.output,
+                                    base_dir=args.config.absolute().parent, allow_local_code=args.allow_local_code)
+            completed_result = {'command': args.command, 'result_status': result['status'], 'output': result['output']}
+            sys.stdout.write(encode(result).decode())
+            sys.stdout.flush()
+            return 2 if result['status'] == 'evaluation_aborted' else 0 if result['complete'] else 3
         if args.command == 'inspect-log':
             data = read_snapshot(args.input)
             result = inspect_log(parse_json(data, 'runner log'), source_format=args.source_format)

@@ -1,8 +1,8 @@
 # Developer-preview review log
 
-Latest continuation: see the dev5 section of [release review](RELEASE_REVIEW.md)
-for public-source Kimi/Opus5 pairing, the live-log score-record correction and local
-verification scope. Those passes did not inspect private implementation; code
+Latest continuation: see the dev6 section of [release review](RELEASE_REVIEW.md)
+for public-source Kimi/Opus5 architecture pairing, local executor adversarial
+findings and verification scope. Those native passes did not inspect private implementation; code
 review clearance remains pending. The initial implementation record below is historical.
 
 Three substantive Claude Code reviews have been received: contract review,
