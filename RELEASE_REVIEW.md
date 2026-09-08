@@ -306,3 +306,28 @@ evidence. Raw controls and native review payloads remain outside the package.
 The offline release script checks catalogue console/module parity and refusal of
 untrusted/invalid evaluation configs without installing simulator dependencies.
 Software/source receipts, not this narrative, identify each verified build.
+
+## dev7 executor hardening
+
+Actual native Claude Opus5 completed a public-only design/fault-injection review;
+private source-review clearance remains pending. Accepted the separation of
+physical outcome and lifecycle, bounded identity-bound receipts, unique admission
+IDs and atomic single-file checkpoints. Did not add a database, own event-sourcing
+stack, automatic retry/resume or security/authentication claims. Disagreed with
+choosing the first determinate outcome when valid receipts contradict: preserve
+both raw artifacts and block comparison rather than prefer a score.
+
+A local Codex adversarial reviewer reproduced stale `.pyc` execution despite a new
+adapter-source hash, newly added files escaping the frozen inventory, and fast
+worker exits bypassing the log threshold. It implemented the scoped input helper
+and 13 tests; the primary agent integrated and verified them. A separate read-only
+closure pass reproduced an endpoint-loss window during the new seal scan. Fixed
+by checkpointing the measured endpoint before sealing and explicitly rejecting
+pending/failed input integrity for comparisons. No private native code sign-off
+or model-policy robustness claim is made by these software checks.
+
+Tests exercise real subprocess termination, stale-bytecode loading, malformed and
+conflicting receipts, wrong plan/trial/admission identities, late input changes,
+interrupted seals, spawn faults and injected atomic-publication failures. Review
+receipts and local simulator controls remain outside this repository. The analysis
+engine, evidence schema, statistics and bundle verifier are unchanged.

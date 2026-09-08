@@ -34,6 +34,10 @@ group; do not accept adapters, checkpoints or LIBERO assets from untrusted users
 Input hashes detect ordinary changes but do not sandbox code, authenticate model
 weights or exhaustively identify dependency/import state. Execution evidence may
 contain paths, observations and user/model output. Nothing is automatically uploaded.
+Receipts are bounded and bound to a unique admission, but remain unsigned claims
+from trusted local code. Atomic replacement protects single-file visibility, not
+multi-file consistency or crash durability. Process/log caps are best-effort and
+do not contain escaped process groups, hostile resource use or unkillable tasks.
 
 ## Reporting issues
 

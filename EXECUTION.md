@@ -94,7 +94,12 @@ PolicyDiff does not enforce offline access or prevent filesystem/network access.
 The run freezes selected task/start indices, adapter/checkpoint/source/asset byte
 hashes (including PolicyDiff Python source), selected runtime dependency versions,
 seeds and budgets before trials. Other adapter imports and dependency bytes are
-not exhaustively hashed. It creates
+not exhaustively hashed. Complete scoped inventories include `.py` files under
+the LIBERO `libero/` directory (including outer package initializers) and its
+assets; additions, removals and byte changes are checked before execution and at
+trial sealing. The explicit adapter runs from its checked source snapshot, not
+a cached `.pyc`. Workers use a fresh private Python cache prefix. This does not
+prove which arbitrary transitive/native dependencies an adapter executes. It creates
 a fresh worker/environment for each baseline/candidate/retest cell, restores the
 selected initial state and performs ten fixed zero-motion/open-gripper settling
 steps before policy action. A success during initialization is a setup error.
@@ -114,9 +119,9 @@ it is not a task-success deadline. Timeouts are interruptions. Cleanup faults
 cannot erase a terminal outcome already recorded. Infrastructure/cleanup faults
 stop further admissions and preserve partial data; no automatic retries/resume.
 Known pairing mismatches abort without a comparison report.
-Ctrl-C while supervising a worker stops that owned group and records an interruption
+Ctrl-C or SIGTERM during main-thread CLI worker supervision stops that owned group and records an interruption
 or preserves its already recorded terminal outcome, then stops admissions. Abrupt
-parent termination, cancellation outside worker supervision, or filesystem failure
+SIGKILL/parent termination, cancellation outside worker supervision, or filesystem failure
 can leave only partial artifacts; these are not automatically resumed or certified.
 
 The output retains the original configuration, frozen plan/planned manifest,
@@ -124,12 +129,38 @@ per-trial logs/actions/initial observations, supervisor outcomes, progress CSV a
 a `comparison/` bundle when the recorded evidence passes input validation.
 Evidence-reference text in that bundle is relative to the **evaluation root**;
 the existing verifier does not open/verify those external trial artifacts.
-Progress files are best-effort checkpoints, not power-loss-safe transactions.
+
+Worker receipts are bounded to 32 KiB and bind schema version, frozen-plan hash,
+cell index and unique admission ID. The worker checks admitted plan bytes before
+loading the environment. Strict validation rejects malformed JSON, ambiguous
+fields, wrong identities and impossible outcome/step combinations. A valid saved
+terminal outcome survives a malformed or absent final record, with an explicit
+execution fault. Conflicting records abort the comparison rather than selecting
+one. IDs/hashes detect ordinary mixups, not a malicious adapter or forged evidence.
+
+The measured endpoint is checkpointed before the potentially slow seal scan;
+`input_integrity: pending` is not verified evidence. The terminal checkpoint is
+updated atomically after sealing. Pending or failed seals retain measured raw
+outcomes but block comparison publication. Checks at two instants do not prove
+inputs were immutable between them. Keep all inputs quiescent during evaluation.
+
+Progress, worker receipts and summaries use a flushed/fsynced temporary file and
+atomic replacement, retaining the previous intact file if publication fails.
+This is atomic single-file visibility, not a multi-file transaction, power-loss
+guarantee or automatic recovery command. Per-trial admission and outcome files
+remain available when progress JSON/CSV snapshots lag or cannot be published.
+An admission or `active_trial` entry is not proof that a worker actually started.
 
 Evaluation reports use fixed-case descriptive analysis only. No IID sampling,
 generalization guarantee, automated deployment gate or task competence is inferred.
-Exit 0 means execution finished with complete recorded outcome coverage, not that
-the candidate passed. Exit 3 means incomplete coverage; input/pairing failures use 2.
+The summary separates `complete` (recorded outcome coverage) from `execution_clean`
+(no observed lifecycle fault), and includes `stop_reason`. Exit 0 requires both,
+not a candidate pass. Exit 3 means incomplete coverage or unclean execution, even
+if all outcomes were saved; input, contradictory-evidence and pairing failures use 2.
+The nested comparison bundle describes outcomes/coverage, not execution health;
+retain `evaluation.json` and the trial evidence with it.
 Preview limits: 100 selected tasks, 300 total trials, 10000 policy steps per trial,
-1–3600 seconds per worker and 1 MiB worker logs. POSIX process-group supervision is
+1–3600 seconds per worker and a 1 MiB log stop threshold. Polling permits transient
+runtime/log-size overshoot; final checks still flag fast-exit overshoots. Neither
+limit is a hard realtime/storage guarantee. POSIX process-group supervision is
 required. Listing 130 tasks does not establish execution validation across all 130.

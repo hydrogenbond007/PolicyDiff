@@ -11,7 +11,8 @@ from policydiff import _libero_worker as worker
 
 class WorkerBoundaryTests(unittest.TestCase):
     def run_worker(self, action=None, cancellation=None, expected_reset=None, close_error=None,
-                   finishing_exception=None, outcome_success=False):
+                   finishing_exception=None, outcome_success=False, seal_drift=False, terminal_write_error=False,
+                   seal_interrupt=False):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         output = Path(temp.name)
@@ -58,20 +59,28 @@ class WorkerBoundaryTests(unittest.TestCase):
         fake_envs = SimpleNamespace(OffScreenRenderEnv=MagicMock(return_value=env))
         with patch.dict('sys.modules', {'numpy': np, 'torch': torch, 'libero.libero.envs': fake_envs}), \
                 patch.object(worker, 'file_hash', return_value='h'), \
-                patch.object(worker, 'runner_hashes', return_value={}), \
+                patch.object(worker, 'runner_hashes', side_effect=[{}, KeyboardInterrupt('during seal') if seal_interrupt else {}]), \
+                patch.object(worker, 'libero_hashes', side_effect=[{'source_sha256': {}, 'asset_sha256': {}},
+                    {'source_sha256': {'changed': 'h'} if seal_drift else {}, 'asset_sha256': {}}]), \
                 patch.object(worker, 'runtime_versions', return_value=plan['runtime_versions']), \
-                patch.object(worker.importlib.util, 'spec_from_file_location', return_value=SimpleNamespace(name='fixture', loader=MagicMock())), \
-                patch.object(worker.importlib.util, 'module_from_spec', return_value=module), \
+                patch.object(worker, 'load_adapter', return_value=module), \
                 patch.dict('os.environ'), patch.object(worker.sys, 'path', worker.sys.path.copy()), \
                 patch.dict('sys.modules'), \
-                patch.object(worker.time, 'monotonic', side_effect=[0.0, finishing_exception or 1.0]):
-            interruption = cancellation or finishing_exception
+                patch.object(worker.time, 'monotonic', side_effect=[0.0, finishing_exception or 1.0]), \
+                patch.object(worker, 'atomic_write', wraps=worker.atomic_write,
+                             side_effect=OSError('synthetic terminal write fault') if terminal_write_error else None):
+            interruption = KeyboardInterrupt() if seal_interrupt else cancellation or finishing_exception
+            if terminal_write_error:
+                with self.assertRaisesRegex(OSError, 'terminal write fault'):
+                    worker.trial(plan, 0, output, expected_reset, trial_id='synthetic-admission')
+                env.close.assert_called_once()
+                return {}, policy, output
             if isinstance(interruption, (SystemExit, KeyboardInterrupt)):
                 with self.assertRaises(type(interruption)):
-                    worker.trial(plan, 0, output, expected_reset)
-                result = json.loads((output / 'terminal.json').read_text())
+                    worker.trial(plan, 0, output, expected_reset, trial_id='synthetic-admission')
+                result = json.loads((output / 'terminal.json').read_text())['result']
             else:
-                result = worker.trial(plan, 0, output, expected_reset)
+                result = worker.trial(plan, 0, output, expected_reset, trial_id='synthetic-admission')
         return result, policy, output
 
     def test_system_exit_is_not_a_horizon_failure(self):
@@ -94,7 +103,7 @@ class WorkerBoundaryTests(unittest.TestCase):
         result, _, output = self.run_worker(action=action, close_error=RuntimeError('cleanup fixture'))
         self.assertEqual((result['status'], result['success']), ('policy_failure', False))
         self.assertIn('cleanup_error', result)
-        terminal = json.loads((output / 'terminal.json').read_text())
+        terminal = json.loads((output / 'terminal.json').read_text())['result']
         self.assertEqual((terminal['status'], terminal['success']), ('policy_failure', False))
         self.assertNotIn('cleanup_error', terminal)
 
@@ -132,3 +141,16 @@ class WorkerBoundaryTests(unittest.TestCase):
                                        finishing_exception=OSError('synthetic bookkeeping error'))
         self.assertEqual((result['status'], result['success']), ('completed', True))
         self.assertIn('cleanup_error', result)
+
+    def test_source_drift_at_seal_retains_outcome_but_marks_integrity_fault(self):
+        result, _, _ = self.run_worker(action=self.valid_action(), outcome_success=True, seal_drift=True)
+        self.assertEqual((result['status'], result['success']), ('completed', True))
+        self.assertIn('input drift at trial seal', result['integrity_error'])
+
+    def test_terminal_write_failure_still_closes_environment(self):
+        self.run_worker(action=self.valid_action(), outcome_success=True, terminal_write_error=True)
+
+    def test_interrupted_seal_preserves_success_but_does_not_assert_input_integrity(self):
+        result, _, _ = self.run_worker(action=self.valid_action(), outcome_success=True, seal_interrupt=True)
+        self.assertTrue(result['success'])
+        self.assertEqual(result['input_integrity'], 'pending')

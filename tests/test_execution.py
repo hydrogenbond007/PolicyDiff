@@ -50,7 +50,7 @@ class ExecutionTests(unittest.TestCase):
     def prepare(self, config=None):
         return execution.prepare_evaluation(self.config if config is None else config, base_dir=self.root)
 
-    def fake_trial(self, plan_path, index, output, seconds, expected_reset=None):
+    def fake_trial(self, plan_path, index, output, seconds, expected_reset=None, **kwargs):
         output.mkdir()
         cell = json.loads(plan_path.read_text())['cells'][index]
         result = {'status': 'completed', 'success': cell['arm'] != 'candidate', 'steps': 2, 'wall_seconds': 0.2,
@@ -95,8 +95,8 @@ class ExecutionTests(unittest.TestCase):
         self.assertEqual(len(list((self.root / 'out/trials').glob('*/supervisor_result.json'))), 6)
 
     def test_infrastructure_fault_stops_admission_and_retains_missing_population(self):
-        def failed(*args):
-            result = self.fake_trial(*args)
+        def failed(*args, **kwargs):
+            result = self.fake_trial(*args, **kwargs)
             return dict(result, status='infrastructure_error', success=None, reason='fixture')
         result = self.run_fake(failed)
         self.assertFalse(result['complete'])
@@ -105,16 +105,67 @@ class ExecutionTests(unittest.TestCase):
         self.assertEqual(result['observed_totals']['unresolved'], 2)
 
     def test_cleanup_fault_preserves_success_and_stops_admission(self):
-        def failed(*args):
-            return dict(self.fake_trial(*args), cleanup_error='synthetic cleanup fault')
+        def failed(*args, **kwargs):
+            return dict(self.fake_trial(*args, **kwargs), cleanup_error='synthetic cleanup fault')
         result = self.run_fake(failed)
         self.assertEqual(result['recorded_trials'], 1)
         report = json.loads((self.root / 'out/comparison/report.json').read_text())
         self.assertEqual(report['slices'][0]['revisions']['baseline']['successes'], 1)
 
+    def test_final_cleanup_fault_is_not_a_clean_execution_despite_full_outcomes(self):
+        def last_fault(*args, **kwargs):
+            result = self.fake_trial(*args, **kwargs)
+            return dict(result, cleanup_error='last-cell cleanup fault') if args[1] == 5 else result
+        result = self.run_fake(last_fault)
+        self.assertTrue(result['complete'])
+        self.assertFalse(result['execution_clean'])
+        self.assertEqual(result['stop_reason'], 'trial_cleanup_or_supervision_fault')
+
+    def test_cli_returns_nonzero_on_complete_but_unclean_execution(self):
+        path = self.root / 'config.json'
+        path.write_bytes(encode(self.config))
+        result = {'status': 'evaluation_finished', 'complete': True, 'execution_clean': False,
+                  'output': str(self.root / 'out')}
+        with patch.object(execution, 'run_evaluation', return_value=result), contextlib.redirect_stdout(io.StringIO()):
+            code = main(['evaluate', '--config', str(path), '--output', str(self.root / 'out'), '--allow-local-code'])
+        self.assertEqual(code, 3)
+
+    def test_first_admission_and_completed_progress_are_both_accounted(self):
+        def checked(*args, **kwargs):
+            progress = json.loads((self.root / 'out/progress.json').read_text())
+            self.assertEqual(progress['recorded_trials'], args[1])
+            self.assertEqual(progress['active_trial']['index'], args[1])
+            return self.fake_trial(*args, **kwargs)
+        self.run_fake(checked)
+        progress = json.loads((self.root / 'out/progress.json').read_text())
+        self.assertIsNone(progress['active_trial'])
+        self.assertEqual(progress['recorded_trials'], 6)
+
+    def test_changed_plan_after_final_trial_still_aborts_and_preserves_progress(self):
+        def changed(*args, **kwargs):
+            result = self.fake_trial(*args, **kwargs)
+            if args[1] == 5:
+                args[0].write_text('{}')
+            return result
+        result = self.run_fake(changed)
+        self.assertEqual(result['status'], 'evaluation_aborted')
+        self.assertEqual(result['recorded_trials'], 6)
+        self.assertIn('plan changed', result['error'])
+        self.assertFalse((self.root / 'out/comparison').exists())
+
+    def test_input_drift_preserves_raw_outcome_but_refuses_comparison(self):
+        def changed(*args, **kwargs):
+            return dict(self.fake_trial(*args, **kwargs), integrity_error='synthetic input drift')
+        result = self.run_fake(changed)
+        self.assertEqual(result['status'], 'evaluation_aborted')
+        self.assertEqual(result['recorded_trials'], 1)
+        saved = json.loads((self.root / 'out/trials/0000/supervisor_result.json').read_text())
+        self.assertTrue(saved['success'])
+        self.assertFalse((self.root / 'out/comparison').exists())
+
     def test_reset_mismatch_aborts_before_the_rest_of_the_matrix(self):
-        def mismatched(*args):
-            result = self.fake_trial(*args)
+        def mismatched(*args, **kwargs):
+            result = self.fake_trial(*args, **kwargs)
             if args[1] == 1:
                 result['physical_state_sha256'] = 'f' * 64
             return result

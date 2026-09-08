@@ -1,6 +1,6 @@
 # Developer-preview review log
 
-Latest continuation: see the dev6 section of [release review](RELEASE_REVIEW.md)
+Latest continuation: see the dev7 section of [release review](RELEASE_REVIEW.md)
 for public-source Kimi/Opus5 architecture pairing, local executor adversarial
 findings and verification scope. Those native passes did not inspect private implementation; code
 review clearance remains pending. The initial implementation record below is historical.

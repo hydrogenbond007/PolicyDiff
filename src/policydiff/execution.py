@@ -1,6 +1,6 @@
 """Opt-in local LIBERO execution; separate from the pure comparison engine."""
-import hashlib
 import importlib.metadata
+from contextlib import contextmanager
 from copy import deepcopy
 import json
 import os
@@ -8,11 +8,15 @@ from pathlib import Path
 import signal
 import subprocess
 import sys
+import threading
 import time
+import uuid
 
 from .bundle import write_bundle
 from .catalogue import LIBERO_COMMIT, resolve_task
 from .engine import compare
+from .execution_inputs import file_hash, libero_hashes
+from .execution_records import atomic_write, collect_receipts
 from .io import csv_bytes, encode, parse_json, read_snapshot, sha256
 from .schema import COLUMNS, ROLES, EvidenceError, fields, integer, require, text, validate_manifest, validate_rows
 
@@ -29,16 +33,6 @@ def runtime_versions():
         return {name: importlib.metadata.version(name) for name in ('numpy', 'torch', 'robosuite', 'mujoco')}
     except importlib.metadata.PackageNotFoundError as exc:
         raise EvidenceError('activate a compatible LIBERO environment before planning or evaluating') from exc
-
-
-def file_hash(path):
-    path = Path(path)
-    require(path.is_file() and not path.is_symlink(), 'execution inputs must be regular non-symlink files')
-    digest = hashlib.sha256()
-    with path.open('rb') as handle:
-        for block in iter(lambda: handle.read(1024 * 1024), b''):
-            digest.update(block)
-    return digest.hexdigest()
 
 
 def prepare_evaluation(config, *, base_dir):
@@ -66,12 +60,7 @@ def prepare_evaluation(config, *, base_dir):
     require(adapter.suffix == '.py', 'adapter must be an explicitly selected trusted Python file')
     adapter_hash = file_hash(adapter)
     source_root = root / 'libero/libero'
-    require((source_root / 'benchmark/libero_suite_task_map.py').is_file(), 'LIBERO source root is missing')
-    source_hashes = {p.relative_to(root).as_posix(): file_hash(p) for p in sorted(source_root.rglob('*.py'))}
-    assets = source_root / 'assets'
-    require(assets.is_dir(), 'LIBERO assets are missing')
-    asset_hashes = {p.relative_to(root).as_posix(): file_hash(p) for p in sorted(assets.rglob('*')) if p.is_file()}
-    require(bool(asset_hashes), 'LIBERO assets directory is empty')
+    inventories = libero_hashes(root)
     # Commit labels alone do not prove unchanged code. Actual source bytes travel
     # in the plan identity and are rechecked in every worker.
     policies = {}
@@ -117,8 +106,8 @@ def prepare_evaluation(config, *, base_dir):
     require(len(cells) <= MAX_TRIALS, 'preview permits at most 300 planned trials per execution')
     plan = {'evaluation_schema_version': 1, 'title': config['title'], 'abi': ABI,
             'catalogue_commit': LIBERO_COMMIT, 'libero_root': str(root), 'runner_sha256': runner_hashes(),
-            'adapter': str(adapter), 'adapter_sha256': adapter_hash, 'source_sha256': source_hashes,
-            'asset_sha256': asset_hashes, 'runtime_versions': runtime_versions(),
+            'adapter': str(adapter), 'adapter_sha256': adapter_hash, **inventories,
+            'runtime_versions': runtime_versions(), 'trial_receipt_schema_version': 1,
             'policies': policies, 'timeout_seconds': config['timeout_seconds'],
             'tasks': selections, 'cells': cells, 'settle_steps': 10,
             'rng_identity': 'declared per-case seed schedule, not a complete RNG-state snapshot',
@@ -144,49 +133,82 @@ def prepare_evaluation(config, *, base_dir):
     return plan, manifest
 
 
-def _trial(plan_path, index, output, seconds, expected_reset=None):
+@contextmanager
+def _worker_signals():
+    """CLI SIGTERM uses the same owned-worker cleanup path as Ctrl-C."""
+    if threading.current_thread() is not threading.main_thread():
+        yield
+        return
+    previous = signal.getsignal(signal.SIGTERM)
+
+    def stop(signum, frame):
+        raise KeyboardInterrupt('SIGTERM')
+
+    signal.signal(signal.SIGTERM, stop)
+    try:
+        yield
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+
+
+def _trial(plan_path, index, output, seconds, expected_reset=None, *, plan_sha256, max_steps):
     """Bound an owned worker group; preserve logs and partial actions on failure."""
     require(not (output / 'worker.log').exists(), 'trial output already exists')
     output.mkdir(exist_ok=False)
     env = dict(os.environ, PYTHONDONTWRITEBYTECODE='1')
     env['PYTHONPATH'] = str(Path(__file__).resolve().parents[1])
+    env['PYTHONPYCACHEPREFIX'] = str(output / 'python-cache')
+    trial_id = uuid.uuid4().hex
+    atomic_write(output / 'admission.json', encode({'index': index, 'plan_sha256': plan_sha256,
+                 'trial_id': trial_id, 'expected_reset': expected_reset, 'status': 'admitted_not_proof_of_worker_start'}))
     started = time.monotonic()
     limited, cancelled, residual_group = False, False, False
-    with (output / 'worker.log').open('xb') as log:
-        proc = subprocess.Popen([sys.executable, '-m', 'policydiff._libero_worker', str(plan_path),
-                                 str(index), str(output), json.dumps(expected_reset)], cwd=output, env=env,
-                                stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+    proc, supervision_error = None, None
+    with (output / 'worker.log').open('xb') as log, _worker_signals():
         try:
+            proc = subprocess.Popen([sys.executable, '-m', 'policydiff._libero_worker', str(plan_path),
+                                     str(index), str(output), json.dumps(expected_reset), plan_sha256, trial_id],
+                                    cwd=output, env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
             while proc.poll() is None:
-                if time.monotonic() - started > seconds or log.tell() > 1024 * 1024:
+                if time.monotonic() - started > seconds or os.fstat(log.fileno()).st_size > 1024 * 1024:
                     limited = True
                     break
                 time.sleep(0.05)
         except KeyboardInterrupt:
             cancelled = True
+        except OSError as exc:
+            supervision_error = f'{type(exc).__name__}: {exc}'[:1000]
         finally:
             # The leader may have exited while a same-session helper remains.
             # This group was created by this Popen; no other run is targeted.
-            try:
-                os.killpg(proc.pid, signal.SIGKILL)
-                residual_group = True
-            except ProcessLookupError:
-                pass
-            proc.wait()
-    final, terminal = output / 'result.json', output / 'terminal.json'
-    if proc.returncode == 0 and final.is_file():
-        result = parse_json(read_snapshot(final), 'trial result')
-    elif terminal.is_file():
-        result = parse_json(read_snapshot(terminal), 'terminal record')
-        result['cleanup_error'] = 'worker_stopped_after_terminal_record'
-    else:
+            if proc is not None:
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                    residual_group = True
+                except ProcessLookupError:
+                    pass
+                proc.wait()
+        log_bytes = os.fstat(log.fileno()).st_size
+    # A fast-exiting worker can cross a cap between polls. Caps are operational,
+    # not a reason to erase its already recorded physical endpoint.
+    limited = limited or log_bytes > 1024 * 1024 or time.monotonic() - started > seconds
+    result = collect_receipts(output, plan_sha256, index, max_steps, trial_id)
+    if result is None:
         result = {'status': 'interrupted' if limited or cancelled else 'infrastructure_error', 'success': None,
-                  'reason': ('operator_cancelled' if cancelled else
+                  'reason': ('supervisor_cancelled' if cancelled else
                              'worker_runtime_or_log_limit' if limited else 'worker_exit_without_result')}
+    if proc is not None and proc.returncode != 0:
+        result['cleanup_error'] = 'worker_nonzero_exit'
     if residual_group:
         result['cleanup_error'] = 'owned_worker_group_terminated'
     if cancelled:
-        result['cleanup_error'] = 'operator_cancelled_worker'
+        result['cleanup_error'] = 'supervisor_cancelled_worker'
+    if limited:
+        result['cleanup_error'] = 'worker_runtime_or_log_limit'
+    if supervision_error:
+        result['cleanup_error'] = supervision_error
+    result['supervisor'] = {'worker_exit_code': proc.returncode if proc is not None else None,
+                            'log_bytes': log_bytes, 'limit_exceeded': limited, 'cancelled': cancelled}
     return result
 
 
@@ -197,20 +219,37 @@ def run_evaluation(config_bytes, output, *, base_dir, allow_local_code=False):
     output = Path(output).absolute()
     require(not output.exists(), 'evaluation output must be a new directory')
     output.mkdir(parents=True, exist_ok=False)
-    (output / 'config.input.json').write_bytes(config_bytes)
+    atomic_write(output / 'config.input.json', config_bytes)
     plan_data = encode(plan)
-    (output / 'plan.json').write_bytes(plan_data)
-    (output / 'manifest.planned.json').write_bytes(encode(manifest))
+    atomic_write(output / 'plan.json', plan_data)
+    atomic_write(output / 'manifest.planned.json', encode(manifest))
     (output / 'trials').mkdir()
     rows, results, resets = [], [], {}
-    invalid_evidence = None
-    for index, cell in enumerate(plan['cells']):
+    invalid_evidence, stop_reason = None, None
+
+    def progress(active=None):
+        atomic_write(output / 'progress.json', encode({'planned_trials': len(plan['cells']),
+                     'recorded_trials': len(results), 'active_trial': active, 'results': results}))
+        atomic_write(output / 'episodes.progress.csv', csv_bytes(rows))
+
+    def unchanged():
         require((output / 'plan.json').read_bytes() == plan_data, 'frozen execution plan changed')
         require(runner_hashes() == plan['runner_sha256'], 'PolicyDiff source changed after planning')
+
+    progress()
+    for index, cell in enumerate(plan['cells']):
+        try:
+            unchanged()
+        except (EvidenceError, OSError) as exc:
+            invalid_evidence = str(exc)
+            break
+        progress({'index': index, **cell})
         trial_dir = output / 'trials' / f'{index:04d}'
         key = cell['task'], cell['state']
-        result = _trial(output / 'plan.json', index, trial_dir, plan['timeout_seconds'], resets.get(key))
-        (trial_dir / 'supervisor_result.json').write_bytes(encode(result))
+        horizon = next(task['max_steps'] for task in plan['tasks'] if task['id'] == cell['task'])
+        result = _trial(output / 'plan.json', index, trial_dir, plan['timeout_seconds'], resets.get(key),
+                        plan_sha256=sha256(plan_data), max_steps=horizon)
+        atomic_write(trial_dir / 'supervisor_result.json', encode(result))
         if cell['arm'] == 'baseline' and result.get('physical_state_sha256') and result.get('rng_sha256'):
             resets[key] = {name: result[name] for name in ('physical_state_sha256', 'rng_sha256')}
         row = dict.fromkeys(COLUMNS, '')
@@ -223,20 +262,23 @@ def run_evaluation(config_bytes, output, *, base_dir, allow_local_code=False):
         rows.append(row)
         results.append({'index': index, **cell, **result})
         # Progress is recoverable evidence, never an automatic resume/retry token.
-        (output / 'progress.json').write_bytes(encode({'planned_trials': len(plan['cells']), 'results': results}))
-        (output / 'episodes.progress.csv').write_bytes(csv_bytes(rows))
+        progress()
         try:
+            require(not result.get('integrity_error'), result.get('integrity_error', 'worker integrity fault'))
             validate_rows(manifest, rows)
-        except EvidenceError as exc:
+            unchanged()
+        except (EvidenceError, OSError) as exc:
             invalid_evidence = str(exc)
             break
         if result['status'] in ('infrastructure_error', 'interrupted') or result.get('cleanup_error'):
+            stop_reason = result['reason'] if not result.get('cleanup_error') else 'trial_cleanup_or_supervision_fault'
             break
     if invalid_evidence:
         result = {'status': 'evaluation_aborted', 'complete': False, 'output': str(output),
                   'planned_trials': len(plan['cells']), 'recorded_trials': len(rows),
-                  'comparison': None, 'error': invalid_evidence, 'plan_sha256': sha256(plan_data)}
-        (output / 'evaluation.json').write_bytes(encode(result))
+                  'comparison': None, 'error': invalid_evidence, 'plan_sha256': sha256(plan_data),
+                  'execution_clean': False, 'stop_reason': 'evidence_integrity_fault'}
+        atomic_write(output / 'evaluation.json', encode(result))
         return result
     report = compare(manifest, rows)
     snapshots = {'manifest.input.json': encode(manifest), 'episodes.input.csv': csv_bytes(rows)}
@@ -245,7 +287,8 @@ def run_evaluation(config_bytes, output, *, base_dir, allow_local_code=False):
     write_bundle(output / 'comparison', report, snapshots)
     result = {'status': 'evaluation_finished', 'output': str(output), 'planned_trials': len(plan['cells']),
               'recorded_trials': len(rows), 'complete': report['required_coverage_complete'],
+              'execution_clean': stop_reason is None, 'stop_reason': stop_reason,
               'plan_sha256': sha256(plan_data), 'comparison': str(output / 'comparison'),
               'observed_totals': report['observed_totals'], 'limitations': plan['limitations']}
-    (output / 'evaluation.json').write_bytes(encode(result))
+    atomic_write(output / 'evaluation.json', encode(result))
     return result

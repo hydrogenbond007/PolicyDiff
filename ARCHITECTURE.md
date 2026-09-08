@@ -75,6 +75,8 @@ completion receipts identify evidence origin and coverage; completion is not a p
 | `log_inspection` | Inventory selected external-runner counters, score and annotation coverage | Import outcomes, infer pairing, read metadata contents or declare readiness |
 | `catalogue` / `_libero_tasks` | Filter pinned public task-name metadata with stable source-order IDs | Claim task readiness, training exclusion or model compatibility |
 | `execution` | Freeze a bounded selection, supervise owned workers, persist partial evidence and call the existing comparison API | Invent outcomes, retry failures or bypass schema gates |
+| `execution_inputs` | Inventory scoped local source/assets and load the checked adapter snapshot | Claim exhaustive dependency identity or run cached adapter bytecode |
+| `execution_records` | Bind/validate worker receipts and atomically publish individual checkpoints | Authenticate workers, resolve contradictory outcomes by preference or promise multi-file durability |
 | `_libero_worker` | Restore and fingerprint selected starts, enforce an explicit observation/action ABI, capture official success | Normalize/clip for an arbitrary model or certify exhaustive state identity |
 | `bundle` | Exclusive snapshots, atomic completion and read-only checksum/metadata checks | Authenticate the author, rerun policy outcomes or follow evidence references |
 | `cli` | Compose file input, comparison and exclusive bundle output | Publish, upload or issue a deployment pass |
@@ -87,6 +89,13 @@ There is no plugin marketplace or automatic loader discovery. The opt-in CLI
 loads exactly the caller-selected trusted Python adapter. Its narrow measured-state,
 budget, retest and evidence-capture contract is in [EXECUTION.md](EXECUTION.md).
 Adding catalogue names never establishes hardware support or valid inference.
+
+Execution health is separate from outcome coverage. A valid endpoint can survive
+cleanup damage, while conflicting receipts or failed/pending input seals block
+the comparison. Receipt schema v1 binds plan hash, cell index and a unique local
+admission ID; dev6's old unversioned worker artifacts are not silently upgraded.
+Existing comparison v1 inputs/bundles remain readable. No automatic resume,
+database, event-log reconstruction, security sandbox or hardware lifecycle claim.
 
 `inspect_log(log, source_format="inspect-robots")` is isolated from the comparison
 engine. It inventories selected v1 fields, preserving recorded denominators and

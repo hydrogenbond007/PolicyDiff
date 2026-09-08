@@ -107,7 +107,7 @@ def main(argv=None):
             completed_result = {'command': args.command, 'result_status': result['status'], 'output': result['output']}
             sys.stdout.write(encode(result).decode())
             sys.stdout.flush()
-            return 2 if result['status'] == 'evaluation_aborted' else 0 if result['complete'] else 3
+            return 2 if result['status'] == 'evaluation_aborted' else 0 if result['complete'] and result['execution_clean'] else 3
         if args.command == 'inspect-log':
             data = read_snapshot(args.input)
             result = inspect_log(parse_json(data, 'runner log'), source_format=args.source_format)

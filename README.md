@@ -254,7 +254,7 @@ Exit codes:
 | --- | --- |
 | 0 | Command succeeded; **not** a policy pass |
 | 2 | Invalid input or output error |
-| 3 | Required coverage is incomplete under `--strict-coverage`, or `evaluate` stopped incomplete |
+| 3 | Required coverage is incomplete under `--strict-coverage`, or `evaluate` is incomplete/unclean |
 | 4 | Internal software error; not an input rejection or policy failure |
 
 Command-line usage errors (missing flags, malformed values or invalid choices)

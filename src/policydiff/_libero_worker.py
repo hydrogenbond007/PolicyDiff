@@ -1,6 +1,6 @@
 """Private single-trial process. Heavy simulator/model dependencies stay optional."""
 import hashlib
-import importlib.util
+from copy import deepcopy
 import json
 import os
 from pathlib import Path
@@ -9,30 +9,39 @@ import sys
 import time
 
 from .execution import ABI, file_hash, runner_hashes, runtime_versions
+from .execution_inputs import libero_hashes, load_adapter
+from .execution_records import atomic_write, receipt
 from .io import encode, parse_json, read_snapshot, sha256
+from .schema import require
 
 OBSERVATION_SHAPES = {'agentview_image': (128, 128, 3), 'robot0_eye_in_hand_image': (128, 128, 3),
                       'robot0_eef_pos': (3,), 'robot0_eef_quat': (4,), 'robot0_gripper_qpos': (2,)}
 
 
-def trial(plan, index, output, expected_reset=None):
+def trial(plan, index, output, expected_reset=None, *, trial_id):
+    plan_digest = sha256(encode(plan))
     cell = plan['cells'][index]
     task = next(item for item in plan['tasks'] if item['id'] == cell['task'])
     policy_spec = plan['policies'][cell['arm']]
     root = Path(plan['libero_root'])
-    result = {'status': 'infrastructure_error', 'success': None, 'reason': 'setup_fault'}
-    env, phase = None, 'setup'
-    try:
+    result = {'status': 'infrastructure_error', 'success': None, 'reason': 'setup_fault',
+              'input_integrity': 'not_checked'}
+    env, phase, inputs_checked = None, 'setup', False
+
+    def verify_inputs():
         if runner_hashes() != plan['runner_sha256']:
             raise ValueError('PolicyDiff source changed after planning')
-        for name, expected in {**plan['source_sha256'], **plan['asset_sha256']}.items():
-            if file_hash(root / name) != expected:
-                raise ValueError('LIBERO source or assets changed after planning')
+        if libero_hashes(root) != {key: plan[key] for key in ('source_sha256', 'asset_sha256')}:
+            raise ValueError('LIBERO source or asset inventory changed after planning')
         for path, expected in ((plan['adapter'], plan['adapter_sha256']),
                                (policy_spec['checkpoint'], policy_spec['checkpoint_sha256']),
                                (task['bddl'], task['bddl_sha256']), (task['init_file'], task['init_file_sha256'])):
             if file_hash(path) != expected:
                 raise ValueError('frozen input bytes changed')
+
+    try:
+        verify_inputs()
+        inputs_checked = True
         config_dir = output / 'libero-config'
         config_dir.mkdir()
         dataset_dir = output / 'unused-datasets'
@@ -106,13 +115,12 @@ def trial(plan, index, output, expected_reset=None):
             raise ValueError('measured reset differs from baseline; policy was not loaded or acted')
 
         phase = 'adapter_load'
-        spec = importlib.util.spec_from_file_location('policydiff_user_adapter', plan['adapter'])
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[spec.name] = module
-        spec.loader.exec_module(module)
+        module = load_adapter(plan['adapter'], plan['adapter_sha256'])
         if getattr(module, 'POLICYDIFF_ABI', None) != ABI:
             raise ValueError('adapter must declare the exact POLICYDIFF_ABI')
-        policy = module.load_policy(Path(policy_spec['checkpoint']), policy_spec['options'])
+        if file_hash(policy_spec['checkpoint']) != policy_spec['checkpoint_sha256']:
+            raise ValueError('checkpoint changed before adapter load')
+        policy = module.load_policy(Path(policy_spec['checkpoint']), deepcopy(policy_spec['options']))
         if not callable(getattr(policy, 'reset', None)) or not callable(getattr(policy, 'act', None)):
             raise ValueError('adapter must return a policy with reset and act methods')
         # Task language is intended policy input, unlike BDDL/evaluator state.
@@ -170,21 +178,34 @@ def trial(plan, index, output, expected_reset=None):
     finally:
         # Persist observed outcomes before a potentially failing/hanging cleanup.
         # This is not a receipt for a clean worker exit or power-loss durability.
-        terminal = output / 'terminal.json'
-        temporary = output / 'terminal.json.tmp'
-        temporary.write_bytes(encode(result))
-        temporary.replace(terminal)
-        if env is not None:
-            try:
-                env.close()
-            except Exception as exc:
-                # Cleanup failure cannot erase an already measured terminal outcome.
-                result['cleanup_error'] = f'{type(exc).__name__}: {exc}'[:1000]
+        try:
+            if inputs_checked:
+                result['input_integrity'] = 'pending'
+            # Save the measured endpoint before potentially slow input sealing.
+            atomic_write(output / 'terminal.json', encode(receipt(plan_digest, index, result, trial_id)))
+            if inputs_checked:
+                try:
+                    verify_inputs()
+                except Exception as exc:
+                    result['input_integrity'] = 'failed'
+                    result['integrity_error'] = f'input drift at trial seal: {type(exc).__name__}: {exc}'[:1000]
+                else:
+                    result['input_integrity'] = 'verified'
+                atomic_write(output / 'terminal.json', encode(receipt(plan_digest, index, result, trial_id)))
+        finally:
+            if env is not None:
+                try:
+                    env.close()
+                except Exception as exc:
+                    # Cleanup failure cannot erase an already measured terminal outcome.
+                    result['cleanup_error'] = f'{type(exc).__name__}: {exc}'[:1000]
     return result
 
 
 if __name__ == '__main__':
-    plan = parse_json(read_snapshot(sys.argv[1]), 'execution plan')
+    data = read_snapshot(sys.argv[1])
+    require(sha256(data) == sys.argv[5], 'execution plan bytes disagree with supervisor admission')
+    plan = parse_json(data, 'execution plan')
     output = Path(sys.argv[3])
-    result = trial(plan, int(sys.argv[2]), output, json.loads(sys.argv[4]))
-    (output / 'result.json').write_bytes(encode(result))
+    result = trial(plan, int(sys.argv[2]), output, json.loads(sys.argv[4]), trial_id=sys.argv[6])
+    atomic_write(output / 'result.json', encode(receipt(sys.argv[5], int(sys.argv[2]), result, sys.argv[6])))

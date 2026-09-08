@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.1.0.dev7 — unreleased
+
+- Versioned, bounded worker receipts bind plan bytes, cell and unique admission.
+  Validate transport/endpoint semantics; preserve valid terminals through final-
+  record damage, refuse contradictory evidence and retain unscored worker faults.
+- Full scoped LIBERO source/asset inventories include additions and outer package
+  initializers. Execute checked adapter source without stale bytecode; use private
+  worker cache prefixes and verify selected inputs again at seal time.
+- Checkpoint measured outcomes before potentially slow sealing. Pending/failed
+  seals block comparisons without erasing those outcomes.
+- Atomic individual progress/receipt/summary publication and explicit admissions.
+  No automatic recovery/resume, cross-file transaction or power-loss guarantee.
+- Main-thread CLI SIGTERM cleanup, spawn-failure accounting and post-exit log/runtime
+  checks. Separate complete outcome coverage from clean execution; lifecycle faults
+  return exit 3 even with all outcomes present. Comparison schema/statistics unchanged.
+
 ## 0.1.0.dev6 — unreleased
 
 - Offline `catalog` and `list_tasks` expose 130 pinned LIBERO task names, suite/query
