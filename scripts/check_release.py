@@ -257,6 +257,27 @@ raise SystemExit(0 if result.wasSuccessful() else 1)
             raise RuntimeError('installed contract description disagrees or loses changes/unknowns/source hashes')
         after.write_text('{}', encoding='utf-8')
         run('installed-contract-invalid-input', cli + contract_args, expected=2)
+        # External-runner inventory is descriptive and does not enter comparisons.
+        external = {'version': 1, 'status': 'success', 'eval': {'task': 'synthetic'},
+                    'results': {'total_scenes': 1, 'total_trials': 2, 'errored_trials': 1},
+                    'samples': [{'scene_id': 's0', 'status': 'success',
+                                 'epochs': [{'operator': 0.0}, {}],
+                                 'operator_judgements': [None, None]}]}
+        log_path = out / 'external-log.json'
+        log_path.write_text(json.dumps(external), encoding='utf-8')
+        inspect_args = ['inspect-log', '--format', 'inspect-robots', '--input', str(log_path)]
+        inventory = json.loads(run('installed-log-inventory', cli + inspect_args).stdout)
+        console_inventory = json.loads(run('installed-console-log-inventory', [console] + inspect_args).stdout)
+        if (inventory != console_inventory or inventory['comparison_support'] != 'not_established'
+                or inventory['observed_counts'] != {'scenes': 1, 'epoch_records': 2,
+                    'scored_epoch_records': 1, 'empty_epoch_records': 1,
+                    'operator_scores_without_recorded_judgement': 1}
+                or inventory['scorers'] != [{'name': 'operator', 'scored_epoch_records': 1,
+                                             'epochs_without_score': 1}]
+                or inventory['inputs'] != {'log_sha256': sha(log_path)}):
+            raise RuntimeError('installed external-log inventory disagrees or loses accounting/source hash')
+        log_path.write_text('{"version":2}', encoding='utf-8')
+        run('installed-log-invalid-version', cli + inspect_args, expected=2)
         run('strict-missingness', cli + ['validate'] + inputs + ['--strict-coverage'], expected=3)
         run('refuse-overwrite', cli + ['demo', '--output', str(out / 'demo')], expected=2)
         for path in (out / 'demo').iterdir():

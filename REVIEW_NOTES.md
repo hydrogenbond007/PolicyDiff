@@ -1,8 +1,9 @@
 # Developer-preview review log
 
-Latest continuation: see the dev4 section of [release review](RELEASE_REVIEW.md)
-for three additional actual Opus 5 passes, protocol-description changes and their
-adjudication. The initial implementation record below is historical.
+Latest continuation: see the dev5 section of [release review](RELEASE_REVIEW.md)
+for public-source Kimi/Opus5 pairing, the live-log score-record correction and local
+verification scope. Those passes did not inspect private implementation; code
+review clearance remains pending. The initial implementation record below is historical.
 
 Three substantive Claude Code reviews have been received: contract review,
 implementation review and patch-closure review. All used the signed-in Claude subscription, requested

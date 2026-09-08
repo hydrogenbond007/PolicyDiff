@@ -11,6 +11,7 @@ from .contract import MAX_SNAPSHOT_BYTES, describe_contract_change
 from .demo import fixture
 from .engine import compare
 from .io import csv_bytes, encode, load_inputs, parse_csv, parse_json, parse_manifest, read_snapshot, sha256
+from .log_inspection import inspect_log
 from .schema import EvidenceError, validate_manifest, validate_rows
 from .triage import TRANSITIONS, select_cases
 
@@ -77,10 +78,21 @@ def main(argv=None):
     contract = sub.add_parser('inspect-contract', help='describe recorded protocol differences; not a comparability check')
     contract.add_argument('--before', required=True, type=Path)
     contract.add_argument('--after', required=True, type=Path)
+    log = sub.add_parser('inspect-log', help='inventory recorded scores and missing annotations; not a comparison or import')
+    log.add_argument('--format', required=True, choices=('inspect-robots',), dest='source_format')
+    log.add_argument('--input', required=True, type=Path)
     args = parser.parse_args(argv)
     completed_result = {}
     record_lines = []
     try:
+        if args.command == 'inspect-log':
+            data = read_snapshot(args.input)
+            result = inspect_log(parse_json(data, 'runner log'), source_format=args.source_format)
+            result['inputs'] = {'log_sha256': sha256(data)}
+            completed_result = {'command': args.command, 'result_status': result['status']}
+            sys.stdout.write(encode(result).decode())
+            sys.stdout.flush()
+            return 0
         if args.command == 'inspect-contract':
             before, before_hash = _contract_input(args.before, 'before')
             after, after_hash = _contract_input(args.after, 'after')

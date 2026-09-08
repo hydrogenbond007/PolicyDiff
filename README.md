@@ -106,6 +106,30 @@ do **not** prove matching protocols: fields omitted from both inputs are invisib
 The command never reads outcomes, changes the score-comparison gate or supplies a
 pass/fail judgment. Exit 0 means the description command completed, even with changes.
 
+## What does an existing runner log actually contain?
+
+For an Inspect Robots JSON log, use the independent read-only inventory command:
+
+```sh
+policydiff inspect-log --format inspect-robots --input run.json
+```
+
+It reports declared counters beside recorded epochs, per-scorer coverage, missing
+grading annotations and accounting differences. A zero score stays a score; an
+empty epoch does not become a policy failure or proof that grading never happened.
+The upstream live writer leaves score records empty even for completed trials;
+its active epoch can also precede the completed-trial counter. Recorded status
+does not prove the process is still running. Missing, empty and all-null annotation
+arrays remain distinguishable.
+
+This is **not an importer or a readiness verdict**. It does not infer binary
+success, compare policies or manufacture checkpoint/reset/RNG identities from
+names and seeds. Metadata contents, instructions, transcripts and sidecars are
+not read or echoed; scene IDs and scorer names are included and may be sensitive.
+Unknown fields remain uninspected. See [format and limits](SCHEMA.md#external-log-inventory).
+No Inspect Robots installation or network connection is needed. Exit 0 means the
+inventory completed, including when accounting differences or missing data exist.
+
 ## Input contract
 
 The demo generates a complete manifest and the CSV header. See

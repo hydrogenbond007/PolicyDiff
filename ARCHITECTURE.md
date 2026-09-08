@@ -48,7 +48,7 @@ validation cannot prove training history. No generalization certificate, deploym
 pass or automatic release gate. Untested slices stay visible. Partial paired
 counts are observed subsets, not unconditional population estimates.
 
-Commands implemented: validate, compare, cases, demo, verify and inspect-contract. Public Python compare(manifest, rows)
+Commands implemented: validate, compare, cases, demo, verify, inspect-contract and inspect-log. Public Python compare(manifest, rows)
 API shares the same validation. Package must install and run offline in an isolated
 venv. Start with an import-oriented preview, not fake support for arbitrary VLAs.
 
@@ -68,15 +68,22 @@ completion receipts identify evidence origin and coverage; completion is not a p
 | `report` | Escape and summarize Markdown with visible truncation | Invent or hide underlying JSON outcomes |
 | `triage` | Select displayed cases from a full validated comparison, retaining all slice summaries | Recompute inference or coverage on outcome-selected cases |
 | `contract` | Describe flat caller-recorded protocol fields across two snapshots | Certify matching protocols, interpret outcomes or weaken the comparison gate |
+| `log_inspection` | Inventory selected external-runner counters, score and annotation coverage | Import outcomes, infer pairing, read metadata contents or declare readiness |
 | `bundle` | Exclusive snapshots, atomic completion and read-only checksum/metadata checks | Authenticate the author, rerun policy outcomes or follow evidence references |
 | `cli` | Compose file input, comparison and exclusive bundle output | Publish, upload or issue a deployment pass |
 
-The supported Python API is `compare`, `describe_contract_change` and `EvidenceError`. Other modules are
+The supported Python API is `compare`, `describe_contract_change`, `inspect_log` and `EvidenceError`. Other modules are
 internal during the preview. Adapters should construct the explicit manifest/row
 contract or use CLI input files, not couple policy execution into the engine.
 No plugin loader is justified yet. A future runner needs its own measured-state,
 budget, retest, intervention and evidence-capture contract; adding an enum alone
 does not establish hardware support or valid repeated-trial inference.
+
+`inspect_log(log, source_format="inspect-robots")` is isolated from the comparison
+engine. It inventories selected v1 fields, preserving recorded denominators and
+unknown annotations, not claiming full upstream-schema validation. The CLI hashes
+one bounded JSON read; it follows no sidecars and emits no outcome manifest.
+Source-specific shape checks stay in this module, not in the evidence schema.
 
 Report and manifest schema versions are independent. The library always emits a
 producer and nullable source inputs, and the CLI fills source hashes. Versioning

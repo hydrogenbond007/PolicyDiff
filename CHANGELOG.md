@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.0.dev5 — unreleased
+
+- Read-only `inspect-log --format inspect-robots` and `inspect_log` API inventory
+  selected external-log v1 fields: declared versus recorded counts, per-scorer
+  denominators, empty epochs, annotation missingness and in-progress accounting.
+- Missing annotations and absent error counters remain unknown. Zero/fractional
+  scores are counted as recorded scores, never inferred as task outcomes.
+- Explicit format/version, bounded arrays/scorers, finite numeric scores and
+  exact input-byte hashes; no metadata traversal, sidecar reads or dependencies.
+- This is not an automatic importer, pairing check or readiness certificate.
+  The outcome schema, comparison engine, inference and bundle format are unchanged.
+
 ## 0.1.0.dev4 — unreleased
 
 - Separate read-only `inspect-contract` command and `describe_contract_change`

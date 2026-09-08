@@ -240,3 +240,33 @@ installed CLI; selected fields are not a complete protocol audit or causal study
 Examples in this repository remain synthetic. These checks establish engineering
 behavior within their scope, not novelty, a defensible business moat or deployment
 readiness. Native review payloads and validation artifacts stay outside the package.
+
+## dev5 external-log inventory
+
+An actual native Kimi design/test-planning pass and a native Claude Opus5
+adversarial case-design pass examined public upstream schema/source only. Neither
+received this implementation or executed tests. Private implementation review
+remains pending payload clearance; these passes are not a code-review sign-off.
+Native records, source pins and adjudication stay outside the package.
+
+Accepted a separate read-only inventory, explicit format/version, bounded selected
+fields, preserved absent/empty/null annotations, and score-record denominators.
+Rejected JSONL/directory discovery, recursive metadata searches, readiness scores,
+automatic imports and new exit-code semantics. This deliberately small helper
+does not replace the upstream runner or establish comparison eligibility.
+
+Claude identified that the upstream live writer leaves even completed epoch score
+records empty. Reproduced with the actual pinned writer's callbacks on synthetic
+records, then corrected the initial "unscored trial" wording: empty means no score
+recorded in this snapshot, not proof that grading never happened. An active epoch
+can precede the completed-trial counter; recorded `started` status is not current
+process liveness. Missing annotations never become negative policy judgements.
+
+Local checks cover fixed output shape, absence distinctions, numeric/array limits,
+opaque metadata, exact hashes, output failure context, and200 seeded accounting
+cases. Seven preserved upstream software-probe logs exercise the installed CLI;
+five snapshots from actual upstream live-writer callbacks exercise source parsing.
+These checks run no robot, policy, scorer or model. No recovery from logless trials,
+physical pairing, full upstream-schema conformance or independent usability is
+claimed. Source/installed tests and module/console commands are covered by the
+offline release script; actual hosted CI remains separate.

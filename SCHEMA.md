@@ -328,3 +328,83 @@ Preserve the original snapshots if you need to reproduce the view. Its byte hash
 identify those snapshots, **not** the actual robot setup. Snapshot labels, field
 names and values may be confidential; nothing is redacted automatically. An
 optional sidecar next to a report bundle stays outside `verify`'s four-file check.
+
+## External-log inventory
+
+`inspect-log --format inspect-robots --input run.json` and
+`inspect_log(log, source_format="inspect-robots")` provide an independent,
+descriptive inventory. The explicit format selects an adapter for the public
+[Inspect Robots v1 log structure](https://github.com/robocurve/inspect-robots/blob/7e4d1b7aee1c0d3cfc3a05a7492b9d12cda666f9/src/inspect_robots/log.py).
+It is not auto-detection, full upstream-schema validation or an outcome importer.
+Only integer source version 1 is supported; future versions fail closed.
+
+Inspected structure:
+
+- Root `status` is `started`, `success`, `error` or `cancelled`; `eval` and
+  `results` are objects and `samples` is an array of at most 1,000 scenes.
+- `results.total_scenes` and `total_trials` are bounded nonnegative integers.
+  `errored_trials` is optional: absent means unknown, not zero; explicit null
+  or a malformed number is rejected.
+- Scenes require distinct nonempty printable `scene_id` strings without surrounding
+  whitespace (up to512 characters), execution status, and `epochs` arrays. Across all scenes there
+  may be at most30,000 recorded epochs and100 distinct epoch-scorer names.
+- Each epoch is a dictionary of at most100 named finite numeric scores. Zero,
+  fractional and negative scores remain recorded scores. Booleans, strings and
+  nonfinite numbers are rejected. Optional `reduced`/`metrics` dictionaries get
+  the same numeric shape checks but are not used to reconstruct trial outcomes.
+  Scorer names are nonempty printable strings up to200 characters without
+  surrounding whitespace.
+- Optional `operator_judgements`, `judgement_sources` and `termination_reasons`
+  must be empty arrays (legacy representation) or parallel to epochs. Entries
+  are null or nonempty printable strings up to200 characters; values/sources
+  are not assigned outcome semantics. Surrounding whitespace, explicit null arrays
+  and misalignment fail.
+- Optional `policy_config`, `embodiment_info` and `scene_metadata` must be objects;
+  optional `trial_metadata` must be empty or a parallel array of objects. Their
+  contents are opaque. Other fields, including other annotation arrays, are not
+  validated, followed or echoed. Additional upstream fields do not imply support.
+
+Output uses `log_inspection_schema_version: 1`, status `log_inspected`, and
+`comparison_support: not_established` on every successful inventory. It includes:
+
+- Producer/version, selected source format/version and run execution status.
+  `inputs.log_sha256` hashes the exact CLI input bytes; in-memory API `inputs`
+  is null. The CLI uses the existing16MiB, UTF-8, duplicate-key/depth/nonfinite
+  JSON rejection path and reads only the explicitly selected file.
+- `declared_counts` retains counters as recorded. `observed_counts` counts scene,
+  epoch, nonempty/scored-epoch and empty-epoch records, plus epochs with a score
+  named `operator` but no recorded non-null operator judgement. That last count
+  is an annotation gap, not proof of grader failure or a new policy failure.
+  These count score **records in this snapshot**, not whether trials were graded:
+  the pinned upstream live writer leaves even completed epochs' scores empty.
+- `scorers` has a sorted union of epoch scorer names, each with its scored-epoch
+  count and `epochs_without_score` across **all recorded epochs**, including empty
+  ones. No success rate, thresholding or reduction is performed.
+- `accounting` labels the run `in_progress` or `terminal` and reports declared
+  scene/trial count discrepancies and error counts exceeding declared trials or
+  empty epochs. These labels reflect the recorded status, not current process
+  liveness or assurance that every planned trial finished. It never corrects the
+  counters. An active live epoch may legitimately
+  precede the completed-trial count; empty epochs need not all be errors. These
+  checks are not exhaustive integrity validation or population reconstruction.
+- `annotation_coverage` counts non-null and unannotated epochs for each inspected
+  annotation. `scenes` preserves source order,0-based indices and IDs, execution
+  status, score/empty counts, per-array state/entry/null counts and metadata presence.
+  An absent array, an explicit empty array and an aligned all-null array stay
+  distinct. Unannotated epochs combine unavailable and explicitly null entries;
+  their separate representation remains in each scene's annotation details.
+- `identity_presence` describes selected `/eval` fields as absent, null, empty
+  or recorded. This checks presence, not type validity, truth or sufficiency.
+  Metadata presence is not a search for checkpoint/reset/RNG evidence. Fields
+  inside opaque metadata may contain such evidence; it is not assessed here.
+- Non-optional limitations: execution success is not task success, planned or
+  never-started trials cannot be inferred, and no physical validity, pairing,
+  independence, deployment verdict or comparison is established.
+
+The CLI emits JSON to stdout and creates no bundle. Exit0 means the inventory
+completed even with accounting differences; invalid selected fields or I/O use
+exit2, unexpected internal errors exit4. Normal argparse usage errors remain2.
+There is no strict-readiness flag, directory crawl, migration, sidecar discovery,
+metadata-value display or upstream-code execution. Preserve the original input
+if you need to reproduce the report. IDs and scorer names may themselves be
+sensitive; output is not an anonymization guarantee.
