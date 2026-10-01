@@ -84,7 +84,9 @@ Paths in this configuration are relative to the configuration file:
 
 Replace the exposure labels with actual known training history. Do not use the
 example's claims by default. Weight-only comparisons require identical adapter
-options and different checkpoint bytes. Context/system comparisons retain the
+options and different checkpoint bytes. Options are compared as canonical JSON:
+object-key order is ignored, but Boolean/numeric types and signed zero are not
+interchangeable. Context/system comparisons retain the
 checkpoint identity and record changed options; mixed changes remain unsupported.
 
 ```sh
@@ -121,6 +123,14 @@ fingerprints are compared before candidate/retest policy execution; the actual
 captured fields are saved, not claimed to exhaust hidden simulator/controller state.
 RNG identity describes a declared seeded schedule, not a complete snapshot or
 proof of deterministic inference. Outcomes that vary on retest remain visible.
+
+Worker `steps` counts policy calls to `env.step` that returned, excluding settling.
+A later grading failure or cancellation preserves that count but leaves the
+outcome unknown. An `env.step` exception does not confirm a completed step and
+does not prove the simulator remained unchanged. A grading or trace-write fault
+can leave fewer action-trace entries than confirmed steps; retain the worker
+diagnostic rather than inferring missing success labels. Elapsed rollout time is
+optional and can be absent after a fault; it is not a zero-duration measurement.
 
 The per-worker operational cap includes loading, reset, execution and cleanup;
 it is not a task-success deadline. Timeouts are interruptions. Cleanup faults

@@ -10,8 +10,8 @@ import time
 import unittest
 from unittest.mock import MagicMock, patch
 
-from policydiff import execution
-from policydiff.execution import _trial
+from policydiff import execution_supervisor as supervisor
+from policydiff.execution_supervisor import _trial
 from policydiff.execution_records import receipt
 
 
@@ -27,6 +27,10 @@ class SupervisorTests(unittest.TestCase):
         real_popen = subprocess.Popen
 
         def substitute(args, **kwargs):
+            self.assertEqual(args[:3], [sys.executable, '-m', 'policydiff._libero_worker'])
+            self.assertEqual(args[3:6], [str(self.root / 'unused-plan.json'), '0', str(self.root / 'trial')])
+            self.assertEqual(args[6:8], ['null', 'a' * 64])
+            self.assertEqual(len(args), 9)
             self.assertEqual(kwargs['env']['PYTHONPYCACHEPREFIX'], str(self.root / 'trial/python-cache'))
             prefix = 'TRIAL_ID = ' + repr(args[-1]) + '\n'
             process = real_popen([sys.executable, '-c', prefix + code], **kwargs)
@@ -38,7 +42,7 @@ class SupervisorTests(unittest.TestCase):
                     time.sleep(0.01)
             return process
 
-        with patch('policydiff.execution.subprocess.Popen', side_effect=substitute):
+        with patch('policydiff.execution_supervisor.subprocess.Popen', side_effect=substitute):
             return _trial(self.root / 'unused-plan.json', 0, self.root / 'trial', seconds,
                           plan_sha256='a' * 64, max_steps=20)
 
@@ -68,15 +72,15 @@ class SupervisorTests(unittest.TestCase):
             checked.append(pid)
             real_killpg(pid, sig)
 
-        with patch('policydiff.execution.os.killpg', side_effect=check_ownership):
+        with patch('policydiff.execution_supervisor.os.killpg', side_effect=check_ownership):
             result = self.launch(self.record('terminal.json') + self.record('result.json'))
         self.assertEqual(len(checked), 1)
         self.assertNotIn('cleanup_error', result)
 
     def test_failed_group_inventory_still_kills_owned_group_and_flags_unclean(self):
         real_killpg = os.killpg
-        with patch('policydiff.execution._live_group_members', side_effect=OSError('synthetic proc failure')), \
-                patch('policydiff.execution.os.killpg', wraps=real_killpg) as kill:
+        with patch('policydiff.execution_supervisor._live_group_members', side_effect=OSError('synthetic proc failure')), \
+                patch('policydiff.execution_supervisor.os.killpg', wraps=real_killpg) as kill:
             result = self.launch(self.record('terminal.json') + self.record('result.json'))
         kill.assert_called_once()
         self.assertTrue(result['success'])
@@ -84,15 +88,54 @@ class SupervisorTests(unittest.TestCase):
         self.assertIn('cleanup_error', result)
 
     def test_process_inventory_limit_fails_closed(self):
-        with patch.object(execution, 'MAX_PROCESS_SCAN', 0), \
+        with patch.object(supervisor, 'MAX_PROCESS_SCAN', 0), \
                 self.assertRaisesRegex(OSError, 'scan limit'):
-            execution._live_group_members(os.getpid())
+            supervisor._live_group_members(os.getpid())
+
+    def process_inventory(self, records):
+        directory = self.root / 'proc'
+        directory.mkdir()
+        for pid, content in records.items():
+            path = directory / str(pid)
+            path.mkdir()
+            (path / 'stat').write_text(content)
+        # Capture scandir before patching: the fake inventory never examines
+        # or signals unrelated processes on the host.
+        scan = os.scandir
+        return patch.object(supervisor.os, 'scandir', side_effect=lambda _: scan(directory))
+
+    def test_process_inventory_ignores_leader_zombies_and_other_groups(self):
+        records = {100: '100 (leader) R 1 100', 101: '101 (zombie) Z 1 100',
+                   102: '102 (dead) X 1 100', 103: '103 (unrelated) R 1 999'}
+        with self.process_inventory(records):
+            self.assertFalse(supervisor._live_group_members(100))
+
+    def test_process_inventory_finds_live_helper_with_parentheses_in_name(self):
+        with self.process_inventory({101: '101 (helper ) with spaces) S 1 100'}):
+            self.assertTrue(supervisor._live_group_members(100))
+
+    def test_process_inventory_rejects_malformed_and_oversized_records(self):
+        with self.process_inventory({101: '101 (broken) R 1 invalid'}):
+            with self.assertRaisesRegex(OSError, 'invalid Linux process'):
+                supervisor._live_group_members(100)
+            (self.root / 'proc/101/stat').write_text('101 (' + 'x' * 8192 + ') R 1 100')
+            with self.assertRaisesRegex(OSError, 'invalid Linux process'):
+                supervisor._live_group_members(100)
+
+    def test_nonmain_thread_signal_guard_does_not_install_handlers(self):
+        with patch.object(supervisor.threading, 'current_thread', return_value=object()), \
+                patch.object(supervisor.signal, 'getsignal') as get, \
+                patch.object(supervisor.signal, 'signal') as install:
+            with supervisor._worker_signals():
+                pass
+        get.assert_not_called()
+        install.assert_not_called()
 
     def test_group_signal_failure_uses_owned_leader_fallback_and_stays_unclean(self):
         code = self.record('terminal.json') + 'import time; time.sleep(30)'
         real_kill = os.kill
-        with patch.object(execution.os, 'killpg', side_effect=PermissionError('synthetic group signal failure')), \
-                patch.object(execution.os, 'kill', wraps=real_kill) as kill:
+        with patch.object(supervisor.os, 'killpg', side_effect=PermissionError('synthetic group signal failure')), \
+                patch.object(supervisor.os, 'kill', wraps=real_kill) as kill:
             result = self.launch(code, seconds=0.2)
         kill.assert_called_once()
         self.assertTrue(result['success'])
@@ -102,11 +145,11 @@ class SupervisorTests(unittest.TestCase):
     def test_failed_signals_cannot_create_an_unbounded_wait(self):
         process = MagicMock(pid=2147483647, returncode=None)
         process.wait.side_effect = subprocess.TimeoutExpired('synthetic worker', 1)
-        with patch.object(execution.subprocess, 'Popen', return_value=process), \
-                patch.object(execution.os, 'waitid', return_value=object()), \
-                patch.object(execution, '_live_group_members', return_value=False), \
-                patch.object(execution.os, 'killpg', side_effect=PermissionError('synthetic group failure')), \
-                patch.object(execution.os, 'kill', side_effect=PermissionError('synthetic leader failure')):
+        with patch.object(supervisor.subprocess, 'Popen', return_value=process), \
+                patch.object(supervisor.os, 'waitid', return_value=object()), \
+                patch.object(supervisor, '_live_group_members', return_value=False), \
+                patch.object(supervisor.os, 'killpg', side_effect=PermissionError('synthetic group failure')), \
+                patch.object(supervisor.os, 'kill', side_effect=PermissionError('synthetic leader failure')):
             result = _trial(self.root / 'unused', 0, self.root / 'trial', 1,
                             plan_sha256='a' * 64, max_steps=20)
         process.wait.assert_called_once_with(timeout=1)
@@ -139,7 +182,7 @@ class SupervisorTests(unittest.TestCase):
                 raise KeyboardInterrupt
             real_sleep(seconds)
 
-        with patch('policydiff.execution.time.sleep', side_effect=cancel_once):
+        with patch('policydiff.execution_supervisor.time.sleep', side_effect=cancel_once):
             result = self.launch('import time; time.sleep(30)')
         self.assertEqual((result['status'], result['success']), ('interrupted', None))
         self.assertEqual(result['reason'], 'supervisor_cancelled')
@@ -174,8 +217,8 @@ class SupervisorTests(unittest.TestCase):
             process.wait(timeout=2)
             return process
 
-        with patch('policydiff.execution.subprocess.Popen', side_effect=substitute), \
-                patch('policydiff.execution.os.killpg') as kill:
+        with patch('policydiff.execution_supervisor.subprocess.Popen', side_effect=substitute), \
+                patch('policydiff.execution_supervisor.os.killpg') as kill:
             result = _trial(self.root / 'unused', 0, self.root / 'trial', 1,
                             plan_sha256='a' * 64, max_steps=20)
         kill.assert_not_called()
@@ -209,7 +252,7 @@ class SupervisorTests(unittest.TestCase):
         self.assertEqual(signal.getsignal(signal.SIGTERM), previous)
 
     def test_failed_spawn_leaves_an_admission_and_unscored_result(self):
-        with patch('policydiff.execution.subprocess.Popen', side_effect=OSError('synthetic spawn failure')):
+        with patch('policydiff.execution_supervisor.subprocess.Popen', side_effect=OSError('synthetic spawn failure')):
             result = _trial(self.root / 'unused', 0, self.root / 'trial', 1,
                             plan_sha256='a' * 64, max_steps=20)
         self.assertEqual((result['status'], result['success']), ('infrastructure_error', None))
@@ -225,10 +268,10 @@ class SupervisorTests(unittest.TestCase):
                 return signal.SIG_DFL if len(calls) == 1 else None
             return signal.SIG_DFL
 
-        with patch.object(execution.signal, 'getsignal', side_effect=handler), \
-                patch.object(execution.signal, 'signal') as install, \
-                patch.object(execution.subprocess, 'Popen') as spawn:
-            with self.assertRaisesRegex(execution.EvidenceError, 'restorable'):
+        with patch.object(supervisor.signal, 'getsignal', side_effect=handler), \
+                patch.object(supervisor.signal, 'signal') as install, \
+                patch.object(supervisor.subprocess, 'Popen') as spawn:
+            with self.assertRaisesRegex(supervisor.EvidenceError, 'restorable'):
                 _trial(self.root / 'unused', 0, self.root / 'trial', 1,
                        plan_sha256='a' * 64, max_steps=20)
         install.assert_not_called()

@@ -12,7 +12,7 @@ from policydiff import _libero_worker as worker
 class WorkerBoundaryTests(unittest.TestCase):
     def run_worker(self, action=None, cancellation=None, expected_reset=None, close_error=None,
                    finishing_exception=None, outcome_success=False, seal_drift=False, terminal_write_error=False,
-                   seal_interrupt=False):
+                   seal_interrupt=False, step_error=None):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         output = Path(temp.name)
@@ -39,6 +39,8 @@ class WorkerBoundaryTests(unittest.TestCase):
         obs = {name: array(shape) for name, shape in worker.OBSERVATION_SHAPES.items()}
         env.set_init_state.return_value = obs
         env.step.return_value = (obs, 0, False, {})
+        if step_error is not None:
+            env.step.side_effect = [(obs, 0, False, {}), step_error]
         env.check_success.side_effect = [False, outcome_success]
         env.get_sim_state.return_value = array((10,))
         env.sim.data.ctrl = array((7,))
@@ -69,7 +71,7 @@ class WorkerBoundaryTests(unittest.TestCase):
                 patch.object(worker.time, 'monotonic', side_effect=[0.0, finishing_exception or 1.0]), \
                 patch.object(worker, 'atomic_write', wraps=worker.atomic_write,
                              side_effect=OSError('synthetic terminal write fault') if terminal_write_error else None):
-            interruption = KeyboardInterrupt() if seal_interrupt else cancellation or finishing_exception
+            interruption = KeyboardInterrupt() if seal_interrupt else cancellation or finishing_exception or outcome_success
             if terminal_write_error:
                 with self.assertRaisesRegex(OSError, 'terminal write fault'):
                     worker.trial(plan, 0, output, expected_reset, trial_id='synthetic-admission')
@@ -129,7 +131,7 @@ class WorkerBoundaryTests(unittest.TestCase):
                                        finishing_exception=KeyboardInterrupt())
         self.assertEqual((result['status'], result['success'], result['reason']),
                          ('completed', True, 'official_success'))
-        self.assertIn('cleanup_error', result)
+        self.assertEqual(result['cleanup_error'], 'finish_cancelled_after_outcome')
 
     def test_late_cancellation_preserves_invalid_action_failure(self):
         result, _, _ = self.run_worker(action=SimpleNamespace(shape=(2,)), finishing_exception=SystemExit(0))
@@ -140,7 +142,31 @@ class WorkerBoundaryTests(unittest.TestCase):
         result, _, _ = self.run_worker(action=self.valid_action(), outcome_success=True,
                                        finishing_exception=OSError('synthetic bookkeeping error'))
         self.assertEqual((result['status'], result['success']), ('completed', True))
-        self.assertIn('cleanup_error', result)
+        self.assertTrue(result['cleanup_error'].startswith('finish_after_outcome:'))
+
+    def test_grading_failure_preserves_executed_action_count_without_an_outcome(self):
+        result, _, output = self.run_worker(action=self.valid_action(),
+                                           outcome_success=RuntimeError('synthetic grader failure'))
+        self.assertEqual((result['status'], result['success'], result['steps']),
+                         ('infrastructure_error', None, 1))
+        self.assertEqual(result['reason'], 'success_check_exception')
+        terminal = json.loads((output / 'terminal.json').read_text())['result']
+        self.assertEqual(terminal, result)
+
+    def test_step_failure_does_not_claim_a_completed_step(self):
+        result, _, _ = self.run_worker(action=self.valid_action(),
+                                      step_error=RuntimeError('synthetic step failure'))
+        self.assertEqual((result['status'], result['success'], result['steps']),
+                         ('infrastructure_error', None, 0))
+        self.assertEqual(result['reason'], 'environment_step_exception')
+
+    def test_grading_cancellation_preserves_steps_without_fabricating_a_failure(self):
+        for error in (KeyboardInterrupt(), SystemExit(0)):
+            with self.subTest(error=type(error).__name__):
+                result, _, _ = self.run_worker(action=self.valid_action(), outcome_success=error)
+                self.assertEqual((result['status'], result['success'], result['steps']),
+                                 ('interrupted', None, 1))
+                self.assertEqual(result['reason'], 'success_check_cancelled')
 
     def test_source_drift_at_seal_retains_outcome_but_marks_integrity_fault(self):
         result, _, _ = self.run_worker(action=self.valid_action(), outcome_success=True, seal_drift=True)

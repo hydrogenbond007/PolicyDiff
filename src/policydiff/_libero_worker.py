@@ -8,8 +8,7 @@ import random
 import sys
 import time
 
-from .execution import ABI, file_hash, runner_hashes, runtime_versions
-from .execution_inputs import libero_hashes, load_adapter
+from .execution_inputs import ABI, file_hash, libero_hashes, load_adapter, runner_hashes, runtime_versions
 from .execution_records import atomic_write, receipt
 from .io import encode, parse_json, read_snapshot, sha256
 from .schema import require
@@ -148,8 +147,9 @@ def trial(plan, index, output, expected_reset=None, *, trial_id):
                 action = action.astype(float)
                 phase = 'environment_step'
                 obs, _, done, _ = env.step(action)
-                success = bool(env.check_success())
                 result['steps'] = step + 1
+                phase = 'success_check'
+                success = bool(env.check_success())
                 if success or done:
                     result.update(status='completed', success=success,
                                   reason='official_success' if success else 'environment_done')
@@ -160,6 +160,7 @@ def trial(plan, index, output, expected_reset=None, *, trial_id):
                     break
             else:
                 result.update(status='completed', success=False, reason='horizon_reached')
+        phase = 'finish'
         result['wall_seconds'] = time.monotonic() - started
     except (KeyboardInterrupt, SystemExit):
         if result['status'] in ('completed', 'policy_failure'):

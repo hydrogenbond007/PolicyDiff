@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.1.0.dev10 — unreleased
+
+- Separate Linux process supervision from evaluation planning/orchestration;
+  move shared ABI/source/runtime identity into the existing input module. The
+  worker no longer imports the orchestrator or report-writing modules.
+- Preserve lifecycle implementation and add fresh-interpreter dependency-boundary
+  tests plus direct process-inventory/signal-guard tests.
+- Fix baseline competence diagnostics when candidate or baseline outcomes are
+  missing. Missing evidence still blocks inference; paired counts, eligibility
+  decisions, statistical calculations and public schemas are unchanged.
+- No backend registry, new dependency, hardware support or automatic recovery.
+
+## 0.1.0.dev9 — unreleased
+
+- Weight-only evaluation compares canonical JSON adapter options, rejecting
+  Boolean/numeric type and signed-zero changes previously hidden by Python
+  equality. Object-key reordering remains accepted.
+- Preserve confirmed step counts when grading fails or is cancelled; keep the
+  outcome unknown. Distinguish grading and final-bookkeeping diagnostics from
+  environment-step and trace-write faults.
+- Add planning/CLI and worker fault-injection regressions; document partial
+  trace and elapsed-time semantics. No new dependency, schema or inference change.
+
 ## 0.1.0.dev8 — unreleased
 
 - Native Claude Opus 5 source review of the pending executor and CLI/inspection

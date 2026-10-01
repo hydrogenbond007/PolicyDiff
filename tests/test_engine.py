@@ -163,6 +163,38 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(inf['unchanged_retest_discordant_pairs'], 1)
         self.assertIn('not subtracted', inf['churn_caveat'])
 
+    def test_unpaired_baseline_successes_are_not_reported_as_absent(self):
+        m, rows = inferential(10)
+        rows = [r for r in rows if r['revision'] != 'after']
+        sl = compare(m, rows)['slices'][0]
+        self.assertEqual(sl['revisions']['before']['successes'], 10)
+        self.assertEqual(sl['observed_pairs']['baseline_successes'], 0)
+        self.assertEqual(sl['inference']['ineligible_reasons'],
+                         ['incomplete or untested declared comparison population'])
+        self.assertFalse(sl['inference']['eligible'])
+        self.assertIsNone(sl['inference']['regression_p'])
+
+    def test_partial_baseline_is_not_called_incompetent_from_missing_outcomes(self):
+        m, rows = inferential(10)
+        rows = [r for r in rows if r['revision'] != 'before' or r['case'] == '0']
+        sl = compare(m, rows)['slices'][0]
+        self.assertEqual(sl['revisions']['before']['successes'], 1)
+        self.assertNotIn('baseline is below the caller-declared competence threshold',
+                         sl['inference']['ineligible_reasons'])
+        self.assertFalse(sl['inference']['eligible'])
+
+    def test_complete_baseline_competence_does_not_depend_on_candidate_coverage(self):
+        m, rows = inferential(10)
+        rows = [r for r in rows if r['revision'] != 'after']
+        for row in rows:
+            if row['revision'] == 'before':
+                row['success'] = row['case'] == '0'
+        sl = compare(m, rows)['slices'][0]
+        reasons = sl['inference']['ineligible_reasons']
+        self.assertIn('baseline is below the caller-declared competence threshold', reasons)
+        self.assertNotIn('no measured baseline successes to retain', reasons)
+        self.assertFalse(sl['inference']['eligible'])
+
     def test_missingness_does_not_create_preservation(self):
         m, rows = inferential()
         rows = [r for r in rows if not (r['revision'] == 'after' and r['case'] == '0')]

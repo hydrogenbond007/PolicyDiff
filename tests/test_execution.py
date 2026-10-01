@@ -10,7 +10,7 @@ import unittest
 from unittest.mock import patch
 
 from policydiff import EvidenceError
-from policydiff import execution
+from policydiff import execution, execution_supervisor
 from policydiff.catalogue import resolve_task
 from policydiff.cli import main
 from policydiff.io import encode, sha256
@@ -83,6 +83,34 @@ class ExecutionTests(unittest.TestCase):
         second, _ = self.prepare()
         key = lambda c: (c['task'], c['state'], c['arm'])
         self.assertEqual({key(c): c['seed'] for c in first['cells']}, {key(c): c['seed'] for c in second['cells']})
+
+    def test_weight_update_rejects_type_changing_adapter_options(self):
+        for before, after in ((True, 1), (False, 0), (1, 1.0), (0.0, -0.0)):
+            with self.subTest(before=before, after=after):
+                self.config['baseline']['options'] = {'nested': [{'value': before}]}
+                self.config['candidate']['options'] = {'nested': [{'value': after}]}
+                with self.assertRaisesRegex(EvidenceError, 'identical adapter options'):
+                    self.prepare()
+
+    def test_weight_update_accepts_options_with_different_object_key_order(self):
+        self.config['baseline']['options'] = {'outer': {'a': 1, 'b': True}, 'c': [0.5]}
+        self.config['candidate']['options'] = {'c': [0.5], 'outer': {'b': True, 'a': 1}}
+        self.prepare()
+
+    def test_cli_rejects_type_changing_options_before_creating_output(self):
+        self.config['baseline']['options'] = {'enabled': True}
+        self.config['candidate']['options'] = {'enabled': 1}
+        path = self.root / 'config.json'
+        path.write_bytes(encode(self.config))
+        out, err = io.StringIO(), io.StringIO()
+        with patch.object(execution, '_trial') as trial, contextlib.redirect_stdout(out), \
+                contextlib.redirect_stderr(err):
+            code = main(['evaluate', '--config', str(path), '--output', str(self.root / 'out'),
+                         '--allow-local-code'])
+        self.assertEqual((code, out.getvalue()), (2, ''))
+        self.assertIn('identical adapter options', json.loads(err.getvalue())['error'])
+        trial.assert_not_called()
+        self.assertFalse((self.root / 'out').exists())
 
     def test_full_run_creates_comparison_and_preserves_original_config(self):
         result = self.run_fake()
@@ -173,15 +201,15 @@ class ExecutionTests(unittest.TestCase):
         self.assertFalse((self.root / 'out/comparison').exists())
 
     def test_automatic_child_reaping_is_rejected_before_admission(self):
-        with patch.object(execution.signal, 'getsignal', return_value=execution.signal.SIG_IGN), \
+        with patch.object(execution_supervisor.signal, 'getsignal', return_value=execution_supervisor.signal.SIG_IGN), \
                 self.assertRaisesRegex(EvidenceError, 'SIGCHLD'):
             self.run_fake()
         self.assertFalse((self.root / 'out').exists())
 
     def test_unrestorable_term_handler_is_rejected_before_admission(self):
         def handler(signum):
-            return None if signum == execution.signal.SIGTERM else execution.signal.SIG_DFL
-        with patch.object(execution.signal, 'getsignal', side_effect=handler), \
+            return None if signum == execution_supervisor.signal.SIGTERM else execution_supervisor.signal.SIG_DFL
+        with patch.object(execution_supervisor.signal, 'getsignal', side_effect=handler), \
                 self.assertRaisesRegex(EvidenceError, 'restorable'):
             self.run_fake()
         self.assertFalse((self.root / 'out').exists())
@@ -202,13 +230,13 @@ class ExecutionTests(unittest.TestCase):
         self.assertFalse((self.root / 'out/trials/0002').exists())
 
     def test_unreadable_process_inventory_is_rejected_before_admission(self):
-        with patch.object(execution.os, 'scandir', side_effect=PermissionError('synthetic proc access')), \
+        with patch.object(execution_supervisor.os, 'scandir', side_effect=PermissionError('synthetic proc access')), \
                 self.assertRaisesRegex(EvidenceError, '/proc'):
             self.run_fake()
         self.assertFalse((self.root / 'out').exists())
 
     def test_unsupported_process_supervision_fails_before_any_admission(self):
-        with patch.object(execution.sys, 'platform', 'darwin'), self.assertRaisesRegex(EvidenceError, 'Linux'):
+        with patch.object(execution_supervisor.sys, 'platform', 'darwin'), self.assertRaisesRegex(EvidenceError, 'Linux'):
             self.run_fake()
         self.assertFalse((self.root / 'out').exists())
 
@@ -291,7 +319,7 @@ class ExecutionTests(unittest.TestCase):
 
     def test_missing_optional_dependencies_are_an_input_error(self):
         self.versions.stop()
-        with patch('policydiff.execution.importlib.metadata.version',
+        with patch('policydiff.execution_inputs.importlib.metadata.version',
                    side_effect=importlib.metadata.PackageNotFoundError('torch')):
             with self.assertRaisesRegex(EvidenceError, 'compatible LIBERO environment'):
                 self.prepare()

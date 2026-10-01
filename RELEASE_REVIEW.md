@@ -373,6 +373,72 @@ faults. The worker rewrites the terminal seal before its final record; separate
 real simulator controls confirmed matching verified receipts. No conflict rule was
 relaxed on the basis of a review payload that omitted the worker source.
 
+## dev9 focused hardening (2026-10-01)
+
+Baseline: clean dev8 checkout, 315 passing source tests. Broad Claude/OpenCode
+reviews timed out without substantive output and are not counted as completed.
+Focused reviews completed with actual native Claude Opus 5 and OpenCode Go's
+Kimi K2.7 Code; model identities were checked against their response/session
+metadata. Reviewers inspected selected source only, not executed tests. Raw
+payloads, hashes and receipts remain outside the package.
+
+Reproduced before fixing: Python equality admitted type-changing adapter options
+in weight-only runs; a grading exception undercounted completed environment
+steps; final timing faults were mislabeled as trace-write faults. Canonical JSON
+option comparison, earlier confirmed-step accounting and explicit phase names
+fix these without changing outcome, inference or evidence schemas.
+
+Accepted Claude's missing negative control: an environment-step exception must
+not claim a completed step. Added grader-cancellation coverage and documented
+partial traces/optional elapsed time instead of adding receipt fields. Rejected
+the suggestion that elapsed time must always be supplied: it is intentionally
+optional. OpenCode's tuple/list concern does not affect worker behavior: the
+CLI takes JSON and workers reload the serialized plan, turning both into lists.
+Non-JSON objects passed directly to the internal planner are not a supported API.
+
+Verification: 321 source tests on Python 3.12, including real subprocess lifecycle
+tests and six new test methods; 1,860 synthetic input mutations yielded 1,810
+expected evidence rejections, 50 valid comparisons and no unexpected exception.
+Offline source-distribution/wheel, isolated installed-package, CLI and bundle
+checks are also required for this candidate. No simulator, model-policy or
+customer-readiness claim; no dependency added and no GitHub publication performed.
+
+## dev10 architecture pairing (2026-10-01)
+
+Actual native Claude Opus 5 and OpenCode Go GLM-5.3-Flash completed design and
+fresh closure reviews. Response/session metadata confirmed both models. Each
+received selected source only, with tools disabled; local executions below are
+separate from reviewer reasoning. Raw receipts stay outside the distribution.
+
+Accepted: extract Linux lifecycle code into `execution_supervisor`; share ABI,
+source hashes and runtime versions through the existing `execution_inputs`.
+Avoided an extra identity module, report-builder hierarchy, validation bypass
+or backend registry. Public analysis exports stay eager and unchanged. Syntax-tree
+comparison confirms nine execution function bodies match dev9 exactly; private
+test patch targets now follow the owning module. Source inventories still cover
+every package Python file, and fresh-process tests enforce transitive boundaries.
+
+GLM identified baseline competence warnings derived from candidate-paired rows.
+Three tests reproduced false no-success/below-threshold explanations before the
+fix. Baseline-arm evidence now drives those explanations; incomplete evidence
+still blocks inference. In 600 seeded old/new engine comparisons (221 eligible
+slice checks), every non-diagnostic report field matched; 920 slice explanations
+were corrected. Retained the existing zero-success-specific explanation rather
+than adding a redundant threshold warning or changing complete-data behavior.
+
+Claude's closure led to explicit worker command/argument assertions, a required
+source-file inventory subset and shared optional-dependency import guards.
+Kept transitive boundary tests rather than subtracting package-level imports:
+introducing heavy/reporting dependencies through public exports should fail too.
+The alleged unnoticed worker rename would already fail the worker import tests;
+command assertions additionally catch target-string drift. Synthetic process
+inventories exercise parser edges; real subprocess tests cover lifecycle cleanup.
+
+Verification: 332 source tests pass on Python 3.12. The offline release recipe
+also checks the installed package, every source-distribution member, CLI behavior
+and bundle consistency. No robot trials, new runtime dependency, public API/schema
+change, publication or broader model-readiness claim is part of this refactor.
+
 A focused fourth native pass identified complete-transport diagnostic loss and
 per-trial preflight errors escaping abort publication. Retain each receipt's
 diagnostic, carry terminal-only faults forward, recheck handler restorability at

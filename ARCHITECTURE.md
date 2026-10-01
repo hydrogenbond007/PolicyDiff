@@ -74,8 +74,9 @@ completion receipts identify evidence origin and coverage; completion is not a p
 | `contract` | Describe flat caller-recorded protocol fields across two snapshots | Certify matching protocols, interpret outcomes or weaken the comparison gate |
 | `log_inspection` | Inventory selected external-runner counters, score and annotation coverage | Import outcomes, infer pairing, read metadata contents or declare readiness |
 | `catalogue` / `_libero_tasks` | Filter pinned public task-name metadata with stable source-order IDs | Claim task readiness, training exclusion or model compatibility |
-| `execution` | Freeze a bounded selection, supervise owned workers, persist partial evidence and call the existing comparison API | Invent outcomes, retry failures or bypass schema gates |
-| `execution_inputs` | Inventory scoped local source/assets and load the checked adapter snapshot | Claim exhaustive dependency identity or run cached adapter bytecode |
+| `execution` | Freeze a bounded selection, invoke the supervisor, persist partial evidence and call the existing comparison API | Own process cleanup, invent outcomes, retry failures or bypass schema gates |
+| `execution_supervisor` | Check Linux lifecycle support, bound one owned worker group and reconcile receipts | Plan tasks, import the worker, render reports or interpret policy changes |
+| `execution_inputs` | Share the ABI/source/runtime identity, inventory local inputs and load the checked adapter snapshot | Import the orchestrator, claim exhaustive dependency identity or run cached adapter bytecode |
 | `execution_records` | Bind/validate worker receipts and atomically publish individual checkpoints | Authenticate workers, resolve contradictory outcomes by preference or promise multi-file durability |
 | `_libero_worker` | Restore and fingerprint selected starts, enforce an explicit observation/action ABI, capture official success | Normalize/clip for an arbitrary model or certify exhaustive state identity |
 | `bundle` | Exclusive snapshots, atomic completion and read-only checksum/metadata checks | Authenticate the author, rerun policy outcomes or follow evidence references |
@@ -89,6 +90,20 @@ There is no plugin marketplace or automatic loader discovery. The opt-in CLI
 loads exactly the caller-selected trusted Python adapter. Its narrow measured-state,
 budget, retest and evidence-capture contract is in [EXECUTION.md](EXECUTION.md).
 Adding catalogue names never establishes hardware support or valid inference.
+
+The planner and worker use the same identity helpers in `execution_inputs`.
+The worker does not import the orchestrator, supervisor or report-writing modules;
+the supervisor invokes it as a separate process, never as an imported module.
+Fresh-interpreter tests enforce these boundaries while preserving the existing
+eager public analysis exports. Linux lifecycle tests exercise the supervisor
+directly. This is an internal module split, not a backend/plugin abstraction.
+All package Python files remain in the frozen source inventory, including the
+supervisor; changing module layout therefore changes plan fingerprints and must
+not be applied to an in-flight evaluation.
+
+Baseline competence diagnostics use baseline-arm outcomes, not the subset with
+candidate outcomes. A partial baseline cannot establish a below-threshold rate;
+missing comparison outcomes still independently block retention inference.
 
 Execution health is separate from outcome coverage. A valid endpoint can survive
 cleanup damage, while conflicting receipts or failed/pending input seals block

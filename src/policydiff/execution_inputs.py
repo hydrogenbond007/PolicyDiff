@@ -1,12 +1,15 @@
-"""Scoped local execution inputs; not exhaustive dependency attestation."""
+"""Shared execution identity and scoped inputs; not exhaustive dependency attestation."""
 import hashlib
+import importlib.metadata
 import importlib.util
 import os
 from pathlib import Path
 import sys
 
 from .io import read_snapshot, sha256
-from .schema import require
+from .schema import EvidenceError, require
+
+ABI = 'libero-panda-rgb128-proprio-osc7-v1'
 
 
 def file_hash(path):
@@ -17,6 +20,17 @@ def file_hash(path):
         for block in iter(lambda: handle.read(1024 * 1024), b''):
             digest.update(block)
     return digest.hexdigest()
+
+
+def runner_hashes():
+    return {path.name: file_hash(path) for path in sorted(Path(__file__).parent.glob('*.py'))}
+
+
+def runtime_versions():
+    try:
+        return {name: importlib.metadata.version(name) for name in ('numpy', 'torch', 'robosuite', 'mujoco')}
+    except importlib.metadata.PackageNotFoundError as exc:
+        raise EvidenceError('activate a compatible LIBERO environment before planning or evaluating') from exc
 
 
 def _inventory(directory, root, *, python_only=False):

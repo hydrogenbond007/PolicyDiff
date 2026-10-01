@@ -98,9 +98,11 @@ def compare(manifest, rows):
             reasons.append("complete unchanged-policy retest is absent")
         if not sl["role"].startswith("old_"):
             reasons.append("formal retention inference is restricted to old-task slices")
-        if counts["baseline_successes"] == 0:
+        baseline = summaries[base_id]
+        if baseline["successes"] == 0:
             reasons.append("no measured baseline successes to retain")
-        elif counts["baseline_successes"] / len(sl["case_ids"]) < manifest["sampling"]["minimum_baseline_success_rate"]:
+        elif (baseline["scored_outcomes"] == len(sl["case_ids"])
+              and baseline["successes"] / len(sl["case_ids"]) < manifest["sampling"]["minimum_baseline_success_rate"]):
             reasons.append("baseline is below the caller-declared competence threshold")
         eligible = not reasons
         retest_counts = _counts(retest_pairs) if retest_id else None
