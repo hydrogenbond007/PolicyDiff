@@ -222,6 +222,20 @@ raise SystemExit(0 if result.wasSuccessful() else 1)
         run('case-view-strict-missingness', cli + view_args + ['--strict-coverage'], expected=3)
         run('installed-cases-unknown-slice', cli + ['cases'] + inputs + ['--slice', 'nope'], expected=2)
         run('installed-cases-invalid-limit', cli + ['cases'] + inputs + ['--limit', '0'], expected=2)
+        group_args = ['triage'] + inputs + ['--group-by', 'axis', '--rank-by', 'unresolved']
+        grouped = json.loads(run('installed-triage', cli + group_args).stdout)
+        console_grouped = json.loads(run('installed-console-triage', [console] + group_args).stdout)
+        if grouped != console_grouped or grouped['status'] != 'changes_grouped':
+            raise RuntimeError('installed grouped-triage entry points disagree')
+        if sum(group['declared_pairs'] for group in grouped['groups']) != 72:
+            raise RuntimeError('grouping changed the full declared population')
+        if grouped['groups'][0]['dimensions'] != {'axis': 'dynamics'}:
+            raise RuntimeError('missing-evidence ranking hid the untested group')
+        rendered = run('installed-triage-markdown', cli + group_args + ['--format', 'markdown']).stdout
+        if 'Unresolved evidence' not in rendered or 'not measured (0/12 pairs)' not in rendered:
+            raise RuntimeError('grouped Markdown hid missing or unmeasured evidence')
+        run('triage-strict-missingness', cli + group_args + ['--strict-coverage'], expected=3)
+        run('installed-triage-invalid-group', cli + ['triage'] + inputs + ['--group-by', 'typo'], expected=2)
         demo_rows = list(csv.DictReader(io.StringIO((out / 'demo/episodes.input.csv').read_text(encoding='utf-8'))))
         for row in demo_rows[:2]:
             row['success'] = 'invalid'

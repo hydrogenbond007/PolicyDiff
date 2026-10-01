@@ -446,3 +446,37 @@ installation and publish a preserved partial abort for trial-setup errors. Added
 direct regressions for each. These final small fixes are locally verified changes,
 not a further native sign-off. Reviews are bounded source challenges, not approval
 votes or proof that every defect has been removed.
+
+## dev11 grouped triage (2026-10-01)
+
+Actual native Claude Opus 5 and OpenCode Go GLM-5.3-Flash completed design/test
+pairing and fresh adversarial source reviews; response/session metadata confirms
+both models. Reviewers received selected public source with tools disabled. The
+operator ran all tests; raw review payloads remain outside the distribution.
+
+Manifold's public failure-grouping workflow inspired a bounded addition: exact
+metadata groups ranked by observed losses or unresolved evidence, not inferred
+causes, video analysis, severity or pooled statistical significance. Existing
+comparison validation, per-slice inference and strict-coverage exits are unchanged.
+
+Accepted Claude's axis-qualified condition keys, missingness breakdown, eligibility
+counts, all-group visibility and original-slice links. Its closure review prompted
+explicit per-group required coverage and per-slice required flags in Markdown.
+GLM's test proposals strengthened partition, interruption, absent/partial retest,
+permutation and escaping coverage. Gains never cancel losses; measured retest pairs
+remain visible with their own denominator even when another retest slice is absent.
+
+Rejected with source/tests: mixed per-slice revision IDs and sparse engine status
+keys are impossible for this internal projection of validated `compare()` output;
+axis identifiers cannot contain slashes. The schema rejects all-optional manifests,
+but optional groups remain visible and explicitly not required. The alleged failing
+escaping test passes; the escape regex does not include `&`, and HTML entities are
+intentional. No escaping-order change or new transition/report schema was needed.
+Existing stdout-failure semantics retain completed computation context, not a
+promise that a bundle exists. A completed review is not unconditional approval.
+
+Verification: 348 source tests, including 16 new grouping tests. The offline release
+recipe also checks installed-package tests and 39 build/CLI/bundle commands. Only
+synthetic software fixtures are used, with no new dependencies or robot trials.
+GitHub Actions for the preceding pushed commit did not start any job steps: the
+account was locked for billing. Local checks do not establish hosted CI success.

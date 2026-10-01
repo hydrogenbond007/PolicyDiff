@@ -72,6 +72,35 @@ misleading empty result. This command validates and compares the entire supplied
 manifest/CSV first; it does not trust an existing `report.json` or open traces.
 Each invocation repeats that full analysis, even when only a display filter changes.
 
+`triage` ranks descriptive groups so you can see where observed regressions and
+missing evidence concentrate:
+
+```sh
+policydiff triage --manifest demo-output/manifest.input.json \
+  --episodes demo-output/episodes.input.csv --group-by task --format markdown
+
+policydiff triage --manifest demo-output/manifest.input.json \
+  --episodes demo-output/episodes.input.csv --group-by axis --rank-by unresolved
+```
+
+Choose `task`, `axis`, `condition` or `role`; condition groups include their axis
+so equal labels on different axes stay separate. Rank by `lost` (default) or
+`unresolved`; this orders raw observed counts, with deterministic dimension-order
+ties. All groups stay visible, including wholly untested groups. Each includes
+planned/paired denominators, gains, unresolved evidence, coverage and retest churn
+with its own denominator. The JSON also includes per-arm status/missing-record
+counts, inference eligibility/reasons and the original slice summaries and hashes.
+
+Grouping is by supplied metadata; it does not inspect videos or infer root causes.
+Groups can mix slice contracts and exposure roles, and repeated starts across
+slices count as separate slice-cases. Counts are descriptive, not pooled statistical
+tests or severity scores. Retest churn is preserved rather than subtracted from
+losses. The existing per-slice inference remains intact. `--strict-coverage` still
+returns exit 3 for incomplete required evidence, in either output format.
+
+The workflow takes inspiration from [Manifold's grouped failure analysis](https://www.bifrost.ai/),
+implemented here using PolicyDiff's existing validated metadata and outcomes.
+
 ## What the first version does
 
 - Lists 130 source-pinned LIBERO tasks by suite or search text, without importing a simulator.

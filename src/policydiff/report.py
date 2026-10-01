@@ -12,6 +12,57 @@ def escape(value):
     return re.sub(r'([\\`*_{\}\[\]()#+.!|>~-])', r'\\\1', value)
 
 
+def triage_markdown(view):
+    comparison = view['comparison']
+    ranking = view['ranking']
+    totals = comparison['observed_totals']
+    lines = [f"# {escape(comparison['title'])} — grouped changes", '',
+             f"Evidence: **{escape(comparison['evidence_origin'])}** · "
+             f"{escape(comparison['baseline'])} → {escape(comparison['candidate'])}", '',
+             f"Grouped by {escape(ranking['group_by'])}; ranked by observed {escape(ranking['rank_by'])} count. "
+             f"All {ranking['group_count']} groups shown; ties use label order.", '',
+             escape(view['scope']), '',
+             f"Full comparison: {totals['lost']} lost / {totals['gained']} gained / {totals['unresolved']} unresolved; "
+             f"{totals['paired_outcomes']}/{totals['declared_pairs']} paired/planned slice-cases. "
+             f"Required coverage complete: {comparison['required_coverage_complete']} "
+             f"({sum(slice_report['required'] for slice_report in view['slices'])} required slices).", '',
+             '| Group | Lost | Gained | Unresolved | Paired / planned | Retest losses / gains | Complete / incomplete / untested slices |',
+             '| --- | --- | --- | --- | --- | --- | --- |']
+    for group in view['groups']:
+        transitions = group['transitions']
+        coverage = group['coverage_counts']
+        retest = group['unchanged_retest']
+        churn = ('not supplied' if retest is None else
+                 f"not measured (0/{retest['declared_pairs']} pairs)" if not retest['pairs'] else
+                 f"{retest['churn_losses']} / {retest['churn_gains']} ({retest['pairs']}/{retest['declared_pairs']} pairs)")
+        lines.append(f"| {escape(group['label'])} | {transitions['lost']} | {transitions['gained']} | "
+                     f"{transitions['unresolved']} | {group['paired_outcomes']} / {group['declared_pairs']} | "
+                     f"{churn} | {coverage['complete']} / {coverage['incomplete']} / {coverage['not_tested']} |")
+    lines += ['', '## Unresolved evidence', '',
+              '| Group | Baseline outcome only | Candidate outcome only | Neither outcome | Eligible / declared slices | Required coverage |',
+              '| --- | --- | --- | --- | --- | --- |']
+    for group in view['groups']:
+        coverage = group['outcome_coverage']
+        required = ('not required (0 slices)' if not group['required_slice_count'] else
+                    f"{'complete' if group['required_coverage_complete'] else 'incomplete'} "
+                    f"({group['required_slice_count']} slices)")
+        lines.append(f"| {escape(group['label'])} | {coverage['baseline_only_outcome']} | "
+                     f"{coverage['candidate_only_outcome']} | {coverage['neither_outcome']} | "
+                     f"{group['eligible_slice_count']} / {len(group['slice_ids'])} | {required} |")
+    lines += ['', '## Original slices', '',
+              '| Slice | Group | Required | Coverage | Retention assessment |', '| --- | --- | --- | --- | --- |']
+    labels = {slice_id: group['label'] for group in view['groups'] for slice_id in group['slice_ids']}
+    for slice_report in view['slices']:
+        inference = slice_report['inference']
+        assessment = inference['status'] if inference['eligible'] else '; '.join(inference['ineligible_reasons'])
+        lines.append(f"| {escape(slice_report['id'])} | {escape(labels[slice_report['id']])} | "
+                     f"{'yes' if slice_report['required'] else 'no'} | "
+                     f"{escape(slice_report['coverage'])} | {escape(assessment)} |")
+    lines += ['', 'The JSON view retains per-arm status counts, source hashes and the original inference details.', '']
+    lines += ['- ' + escape(limitation) for limitation in comparison['limitations']]
+    return '\n'.join(lines) + '\n'
+
+
 def markdown(report):
     totals = report['observed_totals']
     lines = [f"# {escape(report['title'])}", '',

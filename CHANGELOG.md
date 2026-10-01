@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.0.dev11 — unreleased
+
+- Add `triage` with JSON/Markdown output: group by task, axis, condition or role;
+  rank all groups by observed losses or unresolved cases. Condition keys also
+  include their axis to avoid silently merging equal labels from different axes.
+- Retain full denominators, missingness/status breakdowns, partial retest churn,
+  original slice inference and source hashes. New descriptive view schema 1;
+  comparison/bundle schemas and statistical rules are unchanged.
+- Extend installed CLI checks and adversarial tests for grouped evidence,
+  missingness, collisions, escaping and partial-output failures.
+
 ## 0.1.0.dev10 — unreleased
 
 - Separate Linux process supervision from evaluation planning/orchestration;

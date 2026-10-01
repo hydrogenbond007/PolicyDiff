@@ -13,8 +13,9 @@ from .demo import fixture
 from .engine import compare
 from .io import csv_bytes, encode, load_inputs, parse_csv, parse_json, parse_manifest, read_snapshot, sha256
 from .log_inspection import inspect_log
+from .report import triage_markdown
 from .schema import EvidenceError, validate_manifest, validate_rows
-from .triage import TRANSITIONS, select_cases
+from .triage import GROUP_FIELDS, RANK_FIELDS, TRANSITIONS, group_changes, select_cases
 
 
 def _discard_broken_pipe(stream):
@@ -57,7 +58,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--version', action='version', version=__version__)
     sub = parser.add_subparsers(dest='command', required=True)
-    for name in ('compare', 'validate', 'cases'):
+    for name in ('compare', 'validate', 'cases', 'triage'):
         command = sub.add_parser(name)
         command.add_argument('--manifest', required=True, type=Path)
         command.add_argument('--episodes', required=True, type=Path)
@@ -67,11 +68,15 @@ def main(argv=None):
         elif name == 'validate':
             command.add_argument('--max-errors', type=_error_limit, default=20,
                                  help='maximum diagnostics displayed (1–100); all records are checked')
-        else:
+        elif name == 'cases':
             command.add_argument('--slice', dest='slice_ids', action='append', help='display this declared slice; repeatable')
             command.add_argument('--transition', choices=TRANSITIONS, action='append',
                                  help='display this transition; repeatable; default lost, gained, unresolved')
             command.add_argument('--limit', type=int, default=100, help='maximum displayed cases (1–10000); default 100')
+        else:
+            command.add_argument('--group-by', choices=GROUP_FIELDS, default='task')
+            command.add_argument('--rank-by', choices=RANK_FIELDS, default='lost')
+            command.add_argument('--format', choices=('json', 'markdown'), default='json', dest='output_format')
     demo = sub.add_parser('demo', help='generate explicitly synthetic inputs and a report')
     demo.add_argument('--output', required=True, type=Path)
     verify = sub.add_parser('verify', help='check a saved bundle; not a policy pass or authenticity check')
@@ -143,7 +148,11 @@ def main(argv=None):
             validate_rows(manifest, rows, max_errors=args.max_errors)
         report = compare(manifest, rows)
         report['inputs'] = inputs
-        if args.command == 'cases':
+        if args.command == 'triage':
+            result = group_changes(report, group_by=args.group_by, rank_by=args.rank_by)
+            completed_result = {'command': 'triage', 'result_status': result['status']}
+            sys.stdout.write(triage_markdown(result) if args.output_format == 'markdown' else encode(result).decode())
+        elif args.command == 'cases':
             result = select_cases(report, slice_ids=args.slice_ids, transitions=args.transition, limit=args.limit)
             completed_result = {'command': 'cases', 'result_status': 'cases_selected'}
             sys.stdout.write(encode(result).decode())

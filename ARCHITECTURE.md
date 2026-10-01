@@ -51,7 +51,7 @@ validation cannot prove training history. No generalization certificate, deploym
 pass or automatic release gate. Untested slices stay visible. Partial paired
 counts are observed subsets, not unconditional population estimates.
 
-Commands implemented: validate, compare, cases, demo, verify, inspect-contract,
+Commands implemented: validate, compare, cases, triage, demo, verify, inspect-contract,
 inspect-log, catalog and evaluate. Public Python compare(manifest, rows)
 API shares the same validation. Package must install and run offline in an isolated
 venv for analysis/catalogue. Execution dependencies are optional and not downloaded.
@@ -70,7 +70,7 @@ completion receipts identify evidence origin and coverage; completion is not a p
 | `engine` | Pair cases, report changes/coverage, determine inference eligibility | Run policies or silently impute missing results |
 | `statistics` | Bounded numerical functions under caller-established assumptions | Decide experimental readiness |
 | `report` | Escape and summarize Markdown with visible truncation | Invent or hide underlying JSON outcomes |
-| `triage` | Select displayed cases from a full validated comparison, retaining all slice summaries | Recompute inference or coverage on outcome-selected cases |
+| `triage` | Select cases or rank descriptive metadata groups from a full validated comparison, retaining all slice summaries | Infer root causes, pool statistical tests or recompute coverage on selected cases |
 | `contract` | Describe flat caller-recorded protocol fields across two snapshots | Certify matching protocols, interpret outcomes or weaken the comparison gate |
 | `log_inspection` | Inventory selected external-runner counters, score and annotation coverage | Import outcomes, infer pairing, read metadata contents or declare readiness |
 | `catalogue` / `_libero_tasks` | Filter pinned public task-name metadata with stable source-order IDs | Claim task readiness, training exclusion or model compatibility |
@@ -104,6 +104,17 @@ not be applied to an in-flight evaluation.
 Baseline competence diagnostics use baseline-arm outcomes, not the subset with
 candidate outcomes. A partial baseline cannot establish a below-threshold rate;
 missing comparison outcomes still independently block retention inference.
+
+The separate `triage` view has its own schema version 1 and does not change saved
+comparison bundles. It groups all slices by task, axis, axis-plus-condition or
+role. Every declared slice contributes once; repeated case IDs across slices
+remain distinct slice-cases. Rank keys are raw lost/unresolved counts, with ties
+resolved by structured dimensions. Groups retain original denominators, outcome
+coverage partitions, per-arm statuses, observed retest pairs and slice inference
+eligibility counts. No group receives a new inferential decision. The internal
+`group_changes` projection accepts only freshly validated comparison output;
+CLI users supply the original manifest/CSV. Markdown renders the same grouped
+view with escaped labels. Neither format opens evidence references.
 
 Execution health is separate from outcome coverage. A valid endpoint can survive
 cleanup damage, while conflicting receipts or failed/pending input seals block
