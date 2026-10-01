@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import stat
 import subprocess
 import sys
 import tarfile
@@ -117,6 +118,36 @@ def verify_sdist_sources(archive, source_hashes):
                 raise RuntimeError(f'source distribution changed source: {name}')
 
 
+def verify_wheel_sources(archive, source_hashes):
+    """Bind installed package files to the same source inventory as the sdist."""
+    names = archive.namelist()
+    if len(names) != len(set(names)):
+        raise RuntimeError('wheel must have unique member names')
+    for member in archive.infolist():
+        name = member.filename
+        parts = name.rstrip('/').split('/')
+        if '\\' in name or any(part in ('', '.', '..') for part in parts):
+            raise RuntimeError(f'unsafe wheel member path: {name}')
+        allowed_types = (0, stat.S_IFDIR) if member.is_dir() else (0, stat.S_IFREG)
+        if stat.S_IFMT(member.external_attr >> 16) not in allowed_types:
+            raise RuntimeError(f'non-regular wheel member: {name}')
+        if len(parts) == 1 and not member.is_dir() or not (parts[0] == 'policydiff' or
+                parts[0].startswith('policydiff-') and parts[0].endswith('.dist-info')):
+            raise RuntimeError(f'unexpected top-level wheel content: {name}')
+    expected = {name.removeprefix('src/'): digest for name, digest in source_hashes.items()
+                if name.startswith('src/policydiff/')}
+    actual = {name for name in names if name.startswith('policydiff/') and not name.endswith('/')}
+    if actual != set(expected):
+        raise RuntimeError(f'wheel package inventory differs: missing={sorted(set(expected) - actual)}, '
+                           f'extra={sorted(actual - set(expected))}')
+    for name, digest in expected.items():
+        if hashlib.sha256(archive.read(name)).hexdigest() != digest:
+            raise RuntimeError(f'wheel changed source: {name}')
+    metadata = {name.split('/', 1)[0] for name in names if not name.startswith('policydiff/')}
+    if len(metadata) != 1:
+        raise RuntimeError('wheel must have one dist-info directory')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True, help='new directory; never overwritten')
@@ -166,10 +197,10 @@ def main():
             raise RuntimeError('expected one wheel')
         with zipfile.ZipFile(wheels[0]) as archive:
             names = archive.namelist()
-            if any(not (n.startswith('policydiff/') or n.startswith('policydiff-')) for n in names):
-                raise RuntimeError('unexpected top-level wheel content')
             if any(n.endswith(('.pt', '.pth', '.npz', '.mp4', '.pem', '.key')) for n in names):
                 raise RuntimeError('private/binary artifact in wheel')
+            verify_wheel_sources(archive, source_hashes)
+            receipt['wheel_source_hashes_checked'] = True
             receipt['wheel_contents'] = names
         receipt.update(sdist_sha256=sha(sdists[0]), wheel_sha256=sha(wheels[0]))
         run('create-venv', [sys.executable, '-m', 'venv', str(out / 'venv')])

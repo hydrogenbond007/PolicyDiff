@@ -4,11 +4,14 @@ import hashlib
 import importlib.util
 import io
 from pathlib import Path
+import stat
 import subprocess
 import tarfile
 import tempfile
 import unittest
 from unittest.mock import patch
+import warnings
+import zipfile
 
 
 script = Path(__file__).resolve().parents[1] / 'scripts' / 'check_release.py'
@@ -159,6 +162,77 @@ class SourceDistributionTests(unittest.TestCase):
         for members in ([], [valid, valid], [valid, ('other/README.md', b'doc')]):
             with self.subTest(members=members), self.assertRaisesRegex(RuntimeError, 'one root and unique'):
                 self.check(members)
+
+
+class WheelDistributionTests(unittest.TestCase):
+    def check(self, members):
+        data = io.BytesIO()
+        with warnings.catch_warnings(), zipfile.ZipFile(data, 'w') as archive:
+            warnings.simplefilter('ignore', UserWarning)  # Deliberate duplicate-member fixture.
+            for name, content in members:
+                archive.writestr(name, content)
+        data.seek(0)
+        expected = {'src/policydiff/__init__.py': hashlib.sha256(b'module').hexdigest(),
+                    'README.md': hashlib.sha256(b'documentation').hexdigest()}
+        with zipfile.ZipFile(data) as archive:
+            release.verify_wheel_sources(archive, expected)
+
+    def test_package_bytes_match_source_without_requiring_docs_in_wheel(self):
+        self.check([('policydiff/', b''), ('policydiff/__init__.py', b'module'),
+                    ('policydiff-1.dist-info/METADATA', b'metadata')])
+
+    def test_changed_module_is_rejected_even_if_its_behavior_is_unchanged(self):
+        with self.assertRaisesRegex(RuntimeError, 'wheel changed source: policydiff/__init__.py'):
+            self.check([('policydiff/__init__.py', b'module\n# build-time mutation')])
+
+    def test_missing_package_module_is_rejected(self):
+        with self.assertRaisesRegex(RuntimeError, 'wheel package inventory differs'):
+            self.check([('policydiff-1.dist-info/METADATA', b'metadata')])
+
+    def test_extra_package_module_or_asset_is_rejected(self):
+        for name in ('policydiff/extra.py', 'policydiff/secret.txt'):
+            with self.subTest(name=name), self.assertRaisesRegex(RuntimeError, 'wheel package inventory differs'):
+                self.check([('policydiff/__init__.py', b'module'), (name, b'extra')])
+
+    def test_duplicate_archive_members_are_rejected(self):
+        for name in ('policydiff/__init__.py', 'policydiff-1.dist-info/METADATA'):
+            members = [('policydiff/__init__.py', b'module'),
+                       ('policydiff-1.dist-info/METADATA', b'metadata')]
+            with self.subTest(name=name), self.assertRaisesRegex(RuntimeError, 'wheel must have unique member names'):
+                self.check(members + [(name, b'duplicate')])
+
+    def test_installation_data_cannot_override_a_checked_module(self):
+        for name in ('policydiff-1.data/purelib/policydiff/__init__.py',
+                     'policydiff-1.data/platlib/policydiff/__init__.py',
+                     'other_package/__init__.py'):
+            with self.subTest(name=name), self.assertRaisesRegex(RuntimeError, 'unexpected top-level'):
+                self.check([('policydiff/__init__.py', b'module'), (name, b'override')])
+
+    def test_noncanonical_archive_paths_are_rejected(self):
+        for name in ('policydiff/../policydiff/__init__.py', '/policydiff/__init__.py',
+                     'policydiff//__init__.py', 'policydiff-1.dist-info/../override.py',
+                     'policydiff\\__init__.py', 'policydiff/./__init__.py'):
+            with self.subTest(name=name), self.assertRaisesRegex(RuntimeError, 'unsafe wheel member path'):
+                self.check([('policydiff/__init__.py', b'module'), (name, b'override')])
+
+    def test_top_level_files_cannot_masquerade_as_package_or_metadata_directories(self):
+        for name in ('policydiff', 'policydiff-1.dist-info'):
+            with self.subTest(name=name), self.assertRaisesRegex(RuntimeError, 'unexpected top-level'):
+                self.check([('policydiff/__init__.py', b'module'), (name, b'extra')])
+
+    def test_exactly_one_metadata_directory_required(self):
+        for metadata in ([], [('policydiff-1.dist-info/METADATA', b'metadata'),
+                             ('policydiff-2.dist-info/METADATA', b'metadata')]):
+            with self.subTest(metadata=metadata), self.assertRaisesRegex(RuntimeError, 'one dist-info directory'):
+                self.check([('policydiff/__init__.py', b'module')] + metadata)
+
+    def test_special_or_mislabeled_member_types_are_rejected(self):
+        for kind in (stat.S_IFLNK, stat.S_IFCHR, stat.S_IFDIR):
+            info = zipfile.ZipInfo('policydiff-1.dist-info/METADATA')
+            info.create_system = 3
+            info.external_attr = (kind | 0o777) << 16
+            with self.subTest(kind=kind), self.assertRaisesRegex(RuntimeError, 'non-regular wheel member'):
+                self.check([('policydiff/__init__.py', b'module'), (info, b'metadata')])
 
 
 if __name__ == '__main__':

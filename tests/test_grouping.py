@@ -140,6 +140,7 @@ class GroupingTests(unittest.TestCase):
         manifest['slices'].reverse()
         observed = group_changes(compare(manifest, list(reversed(rows))))
         self.assertEqual(expected['groups'], observed['groups'])
+        self.assertEqual(encode(expected['groups']), encode(observed['groups']))
         self.assertEqual(expected['ranking'], observed['ranking'])
         self.assertEqual([group['label'] for group in expected['groups'][1:]],
                          sorted(group['label'] for group in expected['groups'][1:]))

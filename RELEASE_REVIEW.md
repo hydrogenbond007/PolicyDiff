@@ -480,3 +480,30 @@ recipe also checks installed-package tests and 39 build/CLI/bundle commands. Onl
 synthetic software fixtures are used, with no new dependencies or robot trials.
 GitHub Actions for the preceding pushed commit did not start any job steps: the
 account was locked for billing. Local checks do not establish hosted CI success.
+
+### Master delivery qualification (2026-10-01)
+
+A new bounded native Claude Opus 5 release-boundary audit identified that the
+wheel's package bytes were not bound to the checked source inventory. Added exact
+package membership and SHA-256 checks before installation, with rejection of
+duplicate members, noncanonical paths and alternate install-data layouts that
+could overwrite checked modules. The follow-up Claude pass prompted checks for
+special-file entries, multiple metadata roots and bare top-level files; each
+was reproduced with a failing test before correction. Ten new tests cover these boundaries;
+generated distribution metadata is not source-hash verified. This is a controlled
+build check, not protection against a compromised build backend or interpreter.
+
+OpenCode Go GLM-5.3-Flash separately inspected triage portability. Accepted a
+canonical encoded-group equality assertion under input permutation. Rejected
+the proposed Python upper bound: classifiers list tested versions, not an
+exclusive compatibility range. Sparse status/revision keys and slash-containing
+axis collisions are unreachable through the validated comparison contract.
+
+Local qualification passes on Python 3.10.20 and 3.12.3: 358 source tests, 358
+isolated installed-package tests and all 39 release commands on each. Demo bundle
+bytes and cases/triage JSON and Markdown match across these versions. The operator
+also reconciles the complete tracked Git filename set and blob bytes against the
+receipt inventory before pushing; excluded local directories are not silently
+treated as checked publication content. Hosted CI remains separately blocked by
+the account billing lock, with zero steps executed on the preceding commit.
+No policy behavior, runtime dependency, statistics or comparison schema changed.

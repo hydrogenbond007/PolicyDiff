@@ -32,6 +32,10 @@ documentation locations or workflow suffixes need an explicit release-recipe
 update and tests. Known generated/local directories and the exact current output
 directory are excluded, not audited; see the short exclusion list in the script.
 It rechecks inventory and bytes at the end and preserves partial timeout logs.
+Every inventoried source must match its source-distribution bytes. The wheel's
+package files must match the inventoried package files exactly, with no missing,
+extra, changed or duplicate members. Alternate install-data layouts are rejected;
+generated distribution metadata is not source-hash verified.
 This verifies the controlled clean-source recipe, not arbitrary dirty-tree
 `pip install .` behavior or the contents of excluded directories. Audit the Git
 staging list against the checked source hashes before publishing.

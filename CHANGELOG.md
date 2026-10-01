@@ -10,6 +10,8 @@
   comparison/bundle schemas and statistical rules are unchanged.
 - Extend installed CLI checks and adversarial tests for grouped evidence,
   missingness, collisions, escaping and partial-output failures.
+- Bind wheel package contents to verified source hashes; reject changed, missing,
+  extra or duplicate archive members before installing the wheel for tests.
 
 ## 0.1.0.dev10 — unreleased
 
