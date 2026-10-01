@@ -2,6 +2,12 @@
 
 ## 0.1.0.dev11 — unreleased
 
+- Shorten README onboarding; move detailed command semantics to the CLI reference.
+  Add a reproducible real LIBERO scripted-fault demo, replay preview and actual
+  comparison bundle, explicitly distinct from trained-policy evaluation.
+- Index declared case IDs once per validation instead of scanning the list for
+  every row; retain declared order, errors, pairing and comparison semantics.
+
 - Add `triage` with JSON/Markdown output: group by task, axis, condition or role;
   rank all groups by observed losses or unresolved cases. Condition keys also
   include their axis to avoid silently merging equal labels from different axes.

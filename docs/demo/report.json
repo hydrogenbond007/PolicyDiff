@@ -1,0 +1,240 @@
+{
+  "baseline": "baseline",
+  "candidate": "candidate",
+  "change_kind": "system",
+  "coverage_counts": {
+    "complete": 1,
+    "incomplete": 0,
+    "not_tested": 0
+  },
+  "declared_family_size": 1,
+  "eligible_slice_count": 0,
+  "evidence_origin": "simulation",
+  "family_alpha": 0.05,
+  "has_inferential_regression": null,
+  "input_schema_version": 1,
+  "input_valid": true,
+  "inputs": {
+    "episodes_sha256": "9e0911eeb1b8d3998e1d151a32c54a9acc56d1a7a997824b54a11e8e3dbe77e0",
+    "manifest_sha256": "4d4457921bdd62eb62a01ceea4055f6f1140768edb795d7df26f8a33ffaec34e"
+  },
+  "limitations": [
+    "This is an evidence report, not a safety certificate or permission to deploy.",
+    "Caller-supplied hashes/exposure labels do not prove physical execution, training history or IID sampling.",
+    "Paired flips can reflect stochastic variability; retest churn is descriptive and is not subtracted as a causal correction.",
+    "Inference covers this fixed, declared slice family only; not repeated releases, adaptive selection or sequential peeking.",
+    "Alpha correction is separate for regression tests and harmful-flip bounds, not a joint guarantee across both endpoint families.",
+    "Incomplete-pair summaries describe observed subsets; they do not estimate the full declared population.",
+    "Held-out status is relative to declared data; unknown upstream pretraining is not proof of novelty.",
+    "No inference about untested objects, tasks, embodiments or sim-to-real transfer follows.",
+    "Evidence references are unverified local references; this package never opens or executes them.",
+    "The v1 endpoint is the supplied Boolean task outcome under each slice contract; no stable-success inference from truncated traces."
+  ],
+  "manifest": {
+    "baseline": {
+      "checkpoint_sha256": "8093fa41f7897af2c6f2768b6399783b9b45eb2ebdad1f112976b202e792e73b",
+      "family": "scripted-action-replay",
+      "id": "baseline"
+    },
+    "candidate": {
+      "checkpoint_sha256": "8093fa41f7897af2c6f2768b6399783b9b45eb2ebdad1f112976b202e792e73b",
+      "family": "scripted-action-replay",
+      "id": "candidate",
+      "parent": "baseline"
+    },
+    "change": {
+      "description": "Deliberately hold the gripper open; no weight update.",
+      "kind": "system",
+      "upstream_exposure": "unknown"
+    },
+    "evidence_origin": "simulation",
+    "retest": {
+      "checkpoint_sha256": "8093fa41f7897af2c6f2768b6399783b9b45eb2ebdad1f112976b202e792e73b",
+      "family": "scripted-action-replay",
+      "id": "retest"
+    },
+    "sampling": {
+      "alpha": 0.05,
+      "design": "fixed_cases",
+      "frozen_before_outcomes": true,
+      "maximum_harm_probability": 0.1,
+      "minimum_baseline_success_rate": 0.5
+    },
+    "schema_version": 1,
+    "slices": [
+      {
+        "axis": "nominal",
+        "case_ids": [
+          "init-0"
+        ],
+        "condition": "pick up the black bowl between the plate and the ramekin and place it on the plate",
+        "contract_sha256": "5fc67241f564fd6b8e0b277cf6993fe07cea624d3b688e82217d043f29c7ace5",
+        "horizon_steps": 1000,
+        "id": "libero_spatial.0",
+        "parent_exposure": "included",
+        "required": true,
+        "role": "old_rehearsed",
+        "task": "libero_spatial.0",
+        "update_exposure": "included"
+      }
+    ],
+    "title": "Scripted gripper-fault demonstration"
+  },
+  "observed_totals": {
+    "declared_pairs": 1,
+    "gained": 0,
+    "lost": 1,
+    "paired_outcomes": 1,
+    "scope": "Descriptive slice-case counts, not independent pooled trials or a release score.",
+    "unresolved": 0
+  },
+  "producer": {
+    "name": "policydiff",
+    "version": "0.1.0.dev11"
+  },
+  "report_schema_version": 1,
+  "required_coverage_complete": true,
+  "retest": "retest",
+  "slices": [
+    {
+      "axis": "nominal",
+      "cases": [
+        {
+          "id": "init-0",
+          "records": {
+            "baseline": {
+              "evidence_ref": "trials/0000/supervisor_result.json",
+              "status": "completed",
+              "steps": 260,
+              "success": true,
+              "wall_seconds": 5.747282600030303
+            },
+            "candidate": {
+              "evidence_ref": "trials/0001/supervisor_result.json",
+              "status": "completed",
+              "steps": 1000,
+              "success": false,
+              "wall_seconds": 21.387389166280627
+            },
+            "retest": {
+              "evidence_ref": "trials/0002/supervisor_result.json",
+              "status": "completed",
+              "steps": 260,
+              "success": true,
+              "wall_seconds": 6.45732730999589
+            }
+          },
+          "transition": "lost"
+        }
+      ],
+      "condition": "pick up the black bowl between the plate and the ramekin and place it on the plate",
+      "coverage": "complete",
+      "exposure_status": "not_a_held_out_test",
+      "id": "libero_spatial.0",
+      "inference": {
+        "churn_caveat": "Retest churn is not subtracted; observed candidate changes may not be attributable to the update.",
+        "eligible": false,
+        "harmful_flip_probability_upper_bound": null,
+        "ineligible_reasons": [
+          "IID paired sampling was not attested"
+        ],
+        "per_slice_alpha": 0.05,
+        "regression_p": null,
+        "status": "descriptive_only",
+        "unchanged_retest_discordant_pairs": 0
+      },
+      "metrics": {
+        "steps": {
+          "baseline_mean": 260.0,
+          "candidate_mean": 1000.0,
+          "mean_change": 740.0,
+          "paired_outcomes": 1,
+          "paired_values": 1,
+          "scope": "Observed paired values only; stopping/failure censoring and missing metrics can bias means."
+        },
+        "wall_seconds": {
+          "baseline_mean": 5.747282600030303,
+          "candidate_mean": 21.387389166280627,
+          "mean_change": 15.640106566250324,
+          "paired_outcomes": 1,
+          "paired_values": 1,
+          "scope": "Observed paired values only; stopping/failure censoring and missing metrics can bias means."
+        }
+      },
+      "observed_pairs": {
+        "baseline_successes": 1,
+        "candidate_successes": 0,
+        "declared_pairs": 1,
+        "discordant_pairs": 1,
+        "harmful_flips": 1,
+        "helpful_flips": 0,
+        "net_success_change": -1.0,
+        "pairs": 1
+      },
+      "outcome_coverage": {
+        "baseline_only_outcome": 0,
+        "both_outcomes": 1,
+        "candidate_only_outcome": 0,
+        "neither_outcome": 0
+      },
+      "required": true,
+      "revisions": {
+        "baseline": {
+          "expected": 1,
+          "missing_cases": [],
+          "records": 1,
+          "scored_outcomes": 1,
+          "successes": 1,
+          "terminal_status_counts": {
+            "completed": 1,
+            "infrastructure_error": 0,
+            "interrupted": 0,
+            "policy_failure": 0
+          }
+        },
+        "candidate": {
+          "expected": 1,
+          "missing_cases": [],
+          "records": 1,
+          "scored_outcomes": 1,
+          "successes": 0,
+          "terminal_status_counts": {
+            "completed": 1,
+            "infrastructure_error": 0,
+            "interrupted": 0,
+            "policy_failure": 0
+          }
+        },
+        "retest": {
+          "expected": 1,
+          "missing_cases": [],
+          "records": 1,
+          "scored_outcomes": 1,
+          "successes": 1,
+          "terminal_status_counts": {
+            "completed": 1,
+            "infrastructure_error": 0,
+            "interrupted": 0,
+            "policy_failure": 0
+          }
+        }
+      },
+      "role": "old_rehearsed",
+      "task": "libero_spatial.0",
+      "unchanged_retest": {
+        "arm": "retest",
+        "baseline_successes": 1,
+        "churn_gains": 0,
+        "churn_losses": 0,
+        "coverage": "complete",
+        "declared_pairs": 1,
+        "discordant_pairs": 0,
+        "pairs": 1,
+        "retest_successes": 1
+      }
+    }
+  ],
+  "status": "report_created",
+  "title": "Scripted gripper-fault demonstration",
+  "upstream_exposure": "unknown"
+}

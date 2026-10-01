@@ -19,6 +19,19 @@ class ContractTests(unittest.TestCase):
     def test_valid_fixture(self):
         self.assertTrue(compare(self.manifest, self.rows)['input_valid'])
 
+    def test_case_membership_is_indexed_without_changing_declared_order(self):
+        class NoLinearScan(list):
+            def __contains__(self, item):
+                raise AssertionError('per-row case membership must use the index')
+
+        expected = compare(self.manifest, self.rows)
+        sl = self.manifest['slices'][0]
+        sl['case_ids'] = NoLinearScan(sl['case_ids'])
+        self.assertEqual(compare(self.manifest, self.rows), expected)
+        self.rows[0]['case'] = 'undeclared'
+        with self.assertRaisesRegex(EvidenceError, 'undeclared case ID'):
+            compare(self.manifest, self.rows)
+
     def test_fixture_is_valid_at_size_boundaries(self):
         for n in (1, 2, 71, 72, 1000):
             with self.subTest(n=n):

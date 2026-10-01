@@ -1,0 +1,28 @@
+{
+  "bundle_schema_version": 1,
+  "declared_family_size": 1,
+  "eligible_slice_count": 0,
+  "evidence_origin": "simulation",
+  "input_sha256": {
+    "episodes_sha256": "9e0911eeb1b8d3998e1d151a32c54a9acc56d1a7a997824b54a11e8e3dbe77e0",
+    "manifest_sha256": "4d4457921bdd62eb62a01ceea4055f6f1140768edb795d7df26f8a33ffaec34e"
+  },
+  "observed_totals": {
+    "declared_pairs": 1,
+    "gained": 0,
+    "lost": 1,
+    "paired_outcomes": 1,
+    "scope": "Descriptive slice-case counts, not independent pooled trials or a release score.",
+    "unresolved": 0
+  },
+  "producer": "policydiff",
+  "required_coverage_complete": true,
+  "sha256": {
+    "episodes.input.csv": "9e0911eeb1b8d3998e1d151a32c54a9acc56d1a7a997824b54a11e8e3dbe77e0",
+    "manifest.input.json": "4d4457921bdd62eb62a01ceea4055f6f1140768edb795d7df26f8a33ffaec34e",
+    "report.json": "edea37c2cc92018f8d941ad9671610ab4a8383c42d054912fc32db0b6a2a9e2e",
+    "report.md": "a5a7b0fc8a75225d7f90035b98ae374af9a0c3495e32449e651b81a6a6f23a0b"
+  },
+  "status": "complete",
+  "version": "0.1.0.dev11"
+}

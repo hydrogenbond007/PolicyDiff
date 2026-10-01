@@ -1,0 +1,50 @@
+{
+  "baseline": {
+    "checkpoint_sha256": "8093fa41f7897af2c6f2768b6399783b9b45eb2ebdad1f112976b202e792e73b",
+    "family": "scripted-action-replay",
+    "id": "baseline"
+  },
+  "candidate": {
+    "checkpoint_sha256": "8093fa41f7897af2c6f2768b6399783b9b45eb2ebdad1f112976b202e792e73b",
+    "family": "scripted-action-replay",
+    "id": "candidate",
+    "parent": "baseline"
+  },
+  "change": {
+    "description": "Deliberately hold the gripper open; no weight update.",
+    "kind": "system",
+    "upstream_exposure": "unknown"
+  },
+  "evidence_origin": "simulation",
+  "retest": {
+    "checkpoint_sha256": "8093fa41f7897af2c6f2768b6399783b9b45eb2ebdad1f112976b202e792e73b",
+    "family": "scripted-action-replay",
+    "id": "retest"
+  },
+  "sampling": {
+    "alpha": 0.05,
+    "design": "fixed_cases",
+    "frozen_before_outcomes": true,
+    "maximum_harm_probability": 0.1,
+    "minimum_baseline_success_rate": 0.5
+  },
+  "schema_version": 1,
+  "slices": [
+    {
+      "axis": "nominal",
+      "case_ids": [
+        "init-0"
+      ],
+      "condition": "pick up the black bowl between the plate and the ramekin and place it on the plate",
+      "contract_sha256": "5fc67241f564fd6b8e0b277cf6993fe07cea624d3b688e82217d043f29c7ace5",
+      "horizon_steps": 1000,
+      "id": "libero_spatial.0",
+      "parent_exposure": "included",
+      "required": true,
+      "role": "old_rehearsed",
+      "task": "libero_spatial.0",
+      "update_exposure": "included"
+    }
+  ],
+  "title": "Scripted gripper-fault demonstration"
+}

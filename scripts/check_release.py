@@ -19,7 +19,9 @@ PACKAGE = Path(__file__).resolve().parents[1]
 REQUIRED_TOP = ('pyproject.toml', 'MANIFEST.in', 'README.md', 'SCHEMA.md', 'ARCHITECTURE.md',
                 'CONTRIBUTING.md', 'SECURITY.md', 'CHANGELOG.md', 'REVIEW_NOTES.md',
                 'RELEASE_REVIEW.md', 'THIRD_PARTY_NOTICES.md', 'EXECUTION.md', '.gitignore', '.gitattributes')
-SOURCE_TREES = {'src/policydiff': '.py', 'tests': '.py', 'scripts': '.py', '.github/workflows': '.yml'}
+SOURCE_TREES = {'src/policydiff': '.py', 'tests': '.py', 'scripts': '.py', '.github/workflows': '.yml', 'docs': '.md'}
+PUBLIC_ASSETS = ('docs/assets/libero-demo.gif', 'docs/demo/COMPLETE.json',
+                 'docs/demo/manifest.input.json', 'docs/demo/episodes.input.csv', 'docs/demo/report.json')
 # These generated/local-only root directories are excluded, not verified. Do not
 # extend this into a general ignore-glob parser that could hide source assets.
 EXCLUDED_ROOT_DIRS = {'.git', 'build', 'dist', '.venv', 'demo-output', 'another-new-report',
@@ -57,7 +59,7 @@ def source_inventory(package, output):
             if path.is_dir():
                 visit(path)
             elif path.is_file():
-                supported = name in (*REQUIRED_TOP, 'LICENSE') or any(
+                supported = name in (*REQUIRED_TOP, *PUBLIC_ASSETS, 'LICENSE') or any(
                     name.startswith(tree + '/') and path.suffix == suffix
                     for tree, suffix in SOURCE_TREES.items())
                 if not supported:

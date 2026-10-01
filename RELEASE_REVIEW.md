@@ -507,3 +507,34 @@ receipt inventory before pushing; excluded local directories are not silently
 treated as checked publication content. Hosted CI remains separately blocked by
 the account billing lock, with zero steps executed on the preceding commit.
 No policy behavior, runtime dependency, statistics or comparison schema changed.
+
+### Documentation, measured validation cost and real simulation demo (2026-10-01)
+
+README onboarding is reduced from 336 to 109 lines; detailed command semantics
+remain in `docs/CLI.md`. Optional scripts calibrate a known-start controller,
+run the ordinary evaluator with an intentional gripper fault, and render checked
+replays. The README GIF and small actual comparison bundle are explicitly
+allowlisted documentation assets, not new package runtime dependencies.
+
+Three local CPU LIBERO trials completed cleanly: baseline and unchanged retest
+succeeded at step 260; the forced-open-gripper candidate exhausted 1,000 steps.
+The post-run camera recordings match the captured reset fingerprints and every
+success flag. This is one calibrated start and a deliberate system fault, not a
+trained-model benchmark, forgetting result, stable-success audit or transfer claim.
+
+The first native Claude attempt failed during OAuth refresh and was not a review.
+Actual Claude Opus 5 subsequently completed an adversarial source review. Accepted
+checks for empty/partial traces, fixed observation-key coverage and changed replay
+horizons/runtime. Dropped an unused recording metric. Rejected the suspected latched
+success mismatch: the real worker stops at first success. Preserve the original
+three outcomes; strengthened recordings use a new output directory. The existing
+dense-feedback adapters do not support this receipt format; their empty discovery
+is explicitly not an attribution pass.
+
+Core validation now indexes case IDs once; no parsing rule, error order, pairing,
+report order or statistical calculation changed. 300 seeded before/after cases
+produce identical reports or located errors. On one Python 3.12 host, 11-repeat
+full-comparison medians were 39.5 to 29.0 ms (1,000 pairs) and 241.7 to 171.2 ms
+(6,000 declared pairs, 15,000 recorded rows). This is a local software microbenchmark,
+not a robot-throughput promise or CI timing threshold. A structural test prevents
+reintroducing per-row linear case-list scans.

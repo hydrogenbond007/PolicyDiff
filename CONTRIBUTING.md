@@ -59,8 +59,10 @@ local tests or a review summary do not establish that hosted CI passed.
   mocked environment or successful action replay is not trained-policy validation.
 - Preserve missingness and retest churn. Do not convert a lack of evidence into a
   pass, repair scored policy responses, or hide unfavorable cases.
-- Use synthetic fixtures only in this repository. No credentials, checkpoints,
-  private robot data, customer observations, private review transcripts or videos.
+- Use synthetic test fixtures. Documentation may include explicitly reviewed,
+  purpose-built public simulation recordings with reproduction and scope notes.
+  No credentials, trained checkpoints, private robot data, customer observations
+  or private review transcripts. Do not copy existing benchmark logs into examples.
 - Do not add upload behavior, external model calls or publication to the core.
 - Document schema/output changes in the changelog. Pre-alpha does not imply a
   stable schema; consumers must check versions and tolerate explicit unsupported

@@ -43,14 +43,15 @@ class ReleaseInventoryTests(unittest.TestCase):
 
     def test_complete_supported_inventory_without_git(self):
         extras = {'src/policydiff/__init__.py', 'src/policydiff/submodule/code.py',
-                  'tests/test_example.py', 'scripts/check_release.py', '.github/workflows/ci.yml', 'LICENSE'}
+                  'tests/test_example.py', 'scripts/check_release.py', '.github/workflows/ci.yml', 'LICENSE',
+                  'docs/CLI.md', 'docs/assets/libero-demo.gif'}
         for name in extras:
             self.write(name)
         self.assertEqual(self.inventory(), set(release.REQUIRED_TOP) | extras)
 
     def test_unsupported_source_files_are_not_silently_dropped(self):
         for name in ('src/policydiff/asset.txt', '.github/workflows/extra.yaml',
-                     'extra.txt', 'docs/extra.md', 'src/other_package/code.py'):
+                     'extra.txt', 'docs/extra.txt', 'docs/assets/unreviewed.gif', 'src/other_package/code.py'):
             with self.subTest(name=name):
                 path = self.write(name)
                 with self.assertRaisesRegex(RuntimeError, 'unsupported release source file'):

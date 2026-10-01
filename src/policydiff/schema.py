@@ -170,7 +170,7 @@ def _optional_number(value, label, integral=False):
     return number
 
 
-def _validate_row(raw, policies, slices):
+def _validate_row(raw, policies, slices, case_ids):
     fields(raw, COLUMNS, label="episode row")
     row = dict(raw)
     for key in ("revision", "slice", "case"):
@@ -178,7 +178,7 @@ def _validate_row(raw, policies, slices):
     require(row["revision"] in policies, "undeclared revision")
     require(row["slice"] in slices, "undeclared slice")
     sl = slices[row["slice"]]
-    require(row["case"] in sl["case_ids"], "undeclared case ID")
+    require(row["case"] in case_ids[row["slice"]], "undeclared case ID")
     require(row["status"] in STATUSES, "unknown terminal status")
     if row["status"] in OUTCOMES:
         require(type(row["success"]) is bool or (isinstance(row["success"], str) and row["success"] in ("0", "1", "true", "false")), "outcome success must be an explicit Boolean or 0/1/true/false")
@@ -214,10 +214,11 @@ def validate_rows(manifest, rows, *, max_errors=None):
     policies = {r["id"]: r for r in revisions(manifest)}
     slices = {sl["id"]: sl for sl in manifest["slices"]}
     require(len(rows) <= sum(len(sl["case_ids"]) for sl in slices.values()) * len(policies), "too many rows")
+    case_ids = {sid: set(sl['case_ids']) for sid, sl in slices.items()}
     table, errors, error_count = {}, [], 0
     for index, raw in enumerate(rows, 1):
         try:
-            row = _validate_row(raw, policies, slices)
+            row = _validate_row(raw, policies, slices, case_ids)
             key = row["revision"], row["slice"], row["case"]
             require(key not in table, f"duplicate episode: {key}")
             table[key] = row

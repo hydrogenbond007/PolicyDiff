@@ -3,6 +3,8 @@ include .gitattributes .gitignore
 include THIRD_PARTY_NOTICES.md EXECUTION.md
 recursive-include tests *.py
 recursive-include scripts *.py
+recursive-include docs *.md *.gif
+include docs/demo/COMPLETE.json docs/demo/manifest.input.json docs/demo/episodes.input.csv docs/demo/report.json
 recursive-include .github *.yml
 global-exclude *.py[cod] *.pt *.pth *.npz *.mp4 *.pem *.key
 prune build

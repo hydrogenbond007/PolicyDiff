@@ -137,8 +137,10 @@ metadata. Same-build/interpreter/platform byte reproducibility is tested, not
 asserted across different floating-point libraries or unpublished code revisions.
 
 `validate` optionally collects bounded, located diagnostics through the same row
-validator used by `compare`. Invalid rows never yield a partial table. Pairing
-checks are explicitly skipped until rows pass. CSV line locations are separate
+validator used by `compare`. Invalid rows never yield a partial table. Validation
+uses per-slice case-ID sets for row membership, avoiding repeated linear scans;
+the original declared lists still define report order and pairing-error order.
+Pairing checks are explicitly skipped until rows pass. CSV line locations are separate
 from evidence fields. `cases` runs the full comparison before display filtering;
 its independently versioned view retains full-population inference and coverage.
 The view envelope is versioned separately; inherited report fields still follow
